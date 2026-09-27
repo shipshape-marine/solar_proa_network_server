@@ -1,5 +1,3 @@
-[![Proa Local Server Network Hardware Setup](./images/Final%20Build/setup.jpg)](./images/Final%20Build/)
-
 # Hardware
 
 Electrical simulation used for the build can be found at [Solar Proa](https://github.com/shipshape-marine/solar-proa/tree/main/src/electrical_simulation).
