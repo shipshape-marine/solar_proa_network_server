@@ -11,7 +11,7 @@ const dotenv = require("dotenv");
 const path = require("path");
 dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
-const port = 4000;
+const port = 4215;
 const cors = require("cors");
 const mapTilesPath = path.resolve(__dirname, process.env.MAP_TILES_DIR ?? "map-tiles");
 
