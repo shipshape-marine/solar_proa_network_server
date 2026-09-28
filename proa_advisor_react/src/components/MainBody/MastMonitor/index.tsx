@@ -17,9 +17,6 @@ import '../../../data_type/imu';
 
 const ARRAY_LENGTH = 500;
 
-// MAC address of the combined ESP32 node
-const IMU_NODE_MAC = "88:56:A6:6C:F0:04";
-
 function StatusChip({ label, active }: { label: string; active: boolean }) {
     return (
         <Chip
@@ -80,7 +77,7 @@ export default function MastMonitor({ data }: { data: IMUData | null }) {
     // Command panel state
     const [authenticated, setAuthenticated] = useState(isAuthenticated());
     const [commandStatus, setCommandStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [macAddress, setMacAddress] = useState(IMU_NODE_MAC);
+    const [macAddress, setMacAddress] = useState("");
 
     // Re-check auth on focus (token may have been set in Dev Panel)
     useEffect(() => {
@@ -92,6 +89,41 @@ export default function MastMonitor({ data }: { data: IMUData | null }) {
             clearInterval(interval);
         };
     }, []);
+
+    useEffect(() => {
+        if (!authenticated) {
+            setMacAddress("");
+            return;
+        }
+
+        let cancelled = false;
+        const fetchMacAddress = async () => {
+            try {
+                const response = await fetch("/get_mac_address?node=imu", {
+                    headers: getAuthHeaders(),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.macAddress) {
+                    throw new Error(result.message || "Failed to fetch the IMU node MAC address");
+                }
+                if (!cancelled) {
+                    setMacAddress(result.macAddress);
+                }
+            } catch (error: any) {
+                if (!cancelled) {
+                    setCommandStatus({
+                        type: 'error',
+                        message: error.message || 'Failed to fetch the IMU node MAC address',
+                    });
+                }
+            }
+        };
+
+        fetchMacAddress();
+        return () => {
+            cancelled = true;
+        };
+    }, [authenticated]);
 
     // Fetch initial historical data on mount. Switching tabs unmounts this
     // component, so this also restores the chart when the tab is reopened.
@@ -196,6 +228,10 @@ export default function MastMonitor({ data }: { data: IMUData | null }) {
     // Send command to IMU node via backend
     async function sendCommand(command: string) {
         setCommandStatus(null);
+        if (!macAddress) {
+            setCommandStatus({ type: 'error', message: 'Node MAC address is not available' });
+            return;
+        }
         try {
             const response = await fetch("/send_command", {
                 method: "POST",

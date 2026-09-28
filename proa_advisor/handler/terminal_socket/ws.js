@@ -20,11 +20,13 @@ function getShell() {
     }
 }
 
-const wss = new WebSocket.Server({
-    port: 3001,
-});
+const wss = process.env.NODE_ENV === "test"
+    ? null
+    : new WebSocket.Server({
+        port: 3001,
+    });
 
-wss.on("connection", (ws, req) => {
+wss?.on("connection", (ws, req) => {
     // localhost:3001?token=YOUR_JWT
     const query = new URL(req.url, `http://${req.headers.host}`).searchParams;
     try {
@@ -60,12 +62,15 @@ wss.on("connection", (ws, req) => {
 });
 
 function closeAllConnections() {
+    if (!wss) return;
     wss.clients.forEach((client) => {
         client.close(1001, "Server shutting down");
     });
 }
 
-console.log("WebSocket server running on ws://localhost:3001");
+if (wss) {
+    console.log("WebSocket server running on ws://localhost:3001");
+}
 
 module.exports = {
     closeAllConnections,

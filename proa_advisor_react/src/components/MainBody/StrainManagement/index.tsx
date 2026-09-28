@@ -19,9 +19,6 @@ import '../../../data_type/strain';
 
 const ARRAY_LENGTH = 500;
 
-// MAC address of the strain ESP32 node
-const STRAIN_NODE_MAC = "D4:E9:F4:CA:F0:B0";
-
 function isAuthenticated(): boolean {
     const token = localStorage.getItem('token');
     if (!token) return false;
@@ -51,7 +48,7 @@ export default function StrainManagement({ data }: { data: StrainData | null }) 
     // Command panel state
     const [authenticated, setAuthenticated] = useState(isAuthenticated());
     const [commandStatus, setCommandStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [macAddress, setMacAddress] = useState(STRAIN_NODE_MAC);
+    const [macAddress, setMacAddress] = useState("");
     const [selectedRate, setSelectedRate] = useState<string>("20");
 
     // Re-check auth on focus (token may have been set in Dev Panel)
@@ -64,6 +61,41 @@ export default function StrainManagement({ data }: { data: StrainData | null }) 
             clearInterval(interval);
         };
     }, []);
+
+    useEffect(() => {
+        if (!authenticated) {
+            setMacAddress("");
+            return;
+        }
+
+        let cancelled = false;
+        const fetchMacAddress = async () => {
+            try {
+                const response = await fetch("/get_mac_address?node=strain", {
+                    headers: getAuthHeaders(),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.macAddress) {
+                    throw new Error(result.message || "Failed to fetch the strain node MAC address");
+                }
+                if (!cancelled) {
+                    setMacAddress(result.macAddress);
+                }
+            } catch (error: any) {
+                if (!cancelled) {
+                    setCommandStatus({
+                        type: 'error',
+                        message: error.message || 'Failed to fetch the strain node MAC address',
+                    });
+                }
+            }
+        };
+
+        fetchMacAddress();
+        return () => {
+            cancelled = true;
+        };
+    }, [authenticated]);
 
     // Fetch initial historical data on mount. Switching tabs unmounts this
     // component, so this also restores the chart when the tab is reopened.
@@ -150,6 +182,10 @@ export default function StrainManagement({ data }: { data: StrainData | null }) 
     // Send command to strain node via backend
     async function sendCommand(command: string) {
         setCommandStatus(null);
+        if (!macAddress) {
+            setCommandStatus({ type: 'error', message: 'Node MAC address is not available' });
+            return;
+        }
         try {
             const response = await fetch("/send_command", {
                 method: "POST",

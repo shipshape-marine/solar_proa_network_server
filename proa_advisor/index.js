@@ -11,7 +11,7 @@ const dotenv = require("dotenv");
 const path = require("path");
 dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
-const port = 4215;
+const port = 4000;
 const cors = require("cors");
 const mapTilesPath = path.resolve(__dirname, process.env.MAP_TILES_DIR ?? "map-tiles");
 
@@ -44,7 +44,11 @@ const { closeAllConnections } = require("./handler/terminal_socket/ws");
 const { updateRepo } = require("./handler/repository/simple_git");
 const { streamSOCSensorCsvByRun, streamSensorCsvByRun, normalizeRowId, normalizeRunId, normalizeSensorKey, getSOCSensorRunSummaries, getRunSummaries, getSensorLabel, DownloadInProgressError } = require("./handler/database_download");
 const { getMapConfig } = require("./handler/map_config");
-startBackend(); 
+
+const nodeMacAddresses = Object.freeze({
+    imu: "88:56:A6:6C:F0:04",
+    strain: "D4:E9:F4:CA:F0:B0",
+});
 
 
 // Simple admin authentication for accessing dev panel as it is not a full-fledged web application. 
@@ -158,6 +162,14 @@ app.post("/send_command", middlewareAuth, (req, res) => {
     } else {
         res.status(503).json({ ok: false, message: "No serial port connected" });
     }
+});
+
+app.get("/get_mac_address", middlewareAuth, (req, res) => {
+    const node = req.query.node;
+    if (typeof node !== "string" || !Object.hasOwn(nodeMacAddresses, node)) {
+        return res.status(400).json({ message: "node must be one of: imu, strain" });
+    }
+    res.json({ macAddress: nodeMacAddresses[node] });
 });
 
 app.get("/has_internet", (req, res) => {
@@ -352,7 +364,12 @@ app.get("/download_sensor", middlewareAuth, async (req, res) => {
     }
 });
 
-app.listen(port, "0.0.0.0", () => {
-    console.log(`Listening on port ${port}`);
-    console.log(`Access the application at http://localhost:${port}`);
-});
+if (require.main === module) {
+    startBackend();
+    app.listen(port, "0.0.0.0", () => {
+        console.log(`Listening on port ${port}`);
+        console.log(`Access the application at http://localhost:${port}`);
+    });
+}
+
+module.exports = { app };
