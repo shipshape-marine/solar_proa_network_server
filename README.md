@@ -1,10 +1,53 @@
+# Table of Contents
+- [Hardware](#hardware)
+  - [Electrical Simulation and Validation](#electrical-simulation-and-validation)
+  - [PCB Printing and Assembly](#pcb-printing-and-assembly)
+- [Framework](#framework)
+  - [Communication Protocols Choice](#communication-protocols-choice)
+- [Technology Stack](#technology-stack)
+  - [Frontend & Backend Communication](#frontend--backend-communication)
+- [Backend Structure](#backend-structure)
+  - [Folder Structure](#folder-structure)
+- [Frontend Structure](#frontend-structure)
+  - [Steps to add new tabs](#steps-to-add-new-tabs)
+  - [Dev panel control](#dev-panel-control)
+- [Setup Guide](#raspberry-pi-4-setup)
+  - [Part 1: Running the App](#part-1-running-the-app)
+  - [Part 2: Raspberry Pi 4 Setup (Everything else after this is for setting up on raspberry pi)](#part-2-raspberry-pi-4-setup-everything-else-after-this-is-for-setting-up-on-raspberry-pi)
+    - [2.1 Initial Setup (from a fresh install via Raspberry Pi Imager)](#21-initial-setup-from-a-fresh-install-via-raspberry-pi-imager)
+    - [2.2 SSH into the Pi from Another Computer](#22-ssh-into-the-pi-from-another-computer)
+    - [2.3 Optimize Boot Time](#23-optimize-boot-time)
+    - [2.4 Verify Network Connectivity (Before Upgrading Packages)](#24-verify-network-connectivity-before-upgrading-packages)
+    - [2.5 Download Required Packages](#25-download-required-packages)
+    - [2.6 Set Up the Git Repo](#26-set-up-the-git-repo)
+    - [2.7 Set Up the Network (Wi-Fi Access Point)](#27-set-up-the-network-wi-fi-access-point)
+    - [2.8 Set Up Auto-Start on Boot](#28-set-up-auto-start-on-boot)
+    - [2.9 Auto-Redirect Port 80 to the App (Port 4000)](#29-auto-redirect-port-80-to-the-app-port-4000)
+    - [2.10 Note: AP vs. Wi-Fi Receiver Mode](#210-note-ap-vs-wi-fi-receiver-mode)
+
+
 # Hardware
 
-Electrical simulation used for the build can be found at [Solar Proa](https://github.com/shipshape-marine/solar-proa/tree/main/src/electrical_simulation).
+ESP32 microcontrollers is chosed for its low cost, low power consumption, and ease of use. It is also widely supported by the Arduino IDE and has a large community for support.
+
+In comparison:
+- Arduino: Low cost, low power consumption but large in size and limited in processing power.
+- STM32: Low cost, low power consumption, but requires more complex setup and programming.
+- Raspberry Pi: High processing power, but high cost and power consumption. Not suitable for low power applications.
+
+Instead, ESP32 will be used as the main high speed sensor reading and collection node, while a single Raspberry Pi will be used as a local server for data processing, visualization and device control.
+
+## Electrical Simulation and Validation
+Simulation workflow can be found at [Solar Proa](https://github.com/shipshape-marine/solar-proa/tree/main/src/electrical_simulation).
+
+Simulation and validation is done on a parameterised model of the electrical system, with a simple configuration file to change the parameter of the system (panel & battery array setup, component specifications, etc.) to simulate different scenarios and validate the system design.
 
 [![Proa Local Server Network Schema](./images/Final%20Build/Full%20Electrical%20Build.png)](./images/Final%20Build/)
 
+## PCB Printing and Assembly
 KiCad build file [here](./Hardware%20Schematics/ADC%20Power%20Sensor%20Design/).
+
+BOM file might be outdated. KiCad or other PCB design software often have plugins to query available components and prices from PCB manufacturers (e.g. JLCPCB). Please check with your PCB manufacturer for the latest prices and availability.
 
 [![Power Management Board](./images/Power%20Management%20PCB/ADS8688%20Reader.png)](./images/Power%20Management%20PCB/)
 
@@ -12,7 +55,21 @@ KiCad build file [here](./Hardware%20Schematics/ADC%20Power%20Sensor%20Design/).
 
 Network of ESP32 microcontrollers with a Raspberry Pi 4 acting as a local server. ESP32 reading the sensors (slave) communicates bi-directionally via ESP-NOW where the main (Master) ESP32 sends the data to the raspberry pi via Serial communication.
 
+## Communication Protocols Choice
 ESP-NOW used for its low latency and low power consumption while being very easy to setup (<10 lines to setup + 2 function that runs when receiving or sending data), while Serial is used for its reliability and ease of use.
+
+| Protocol | Latency | Power Consumption | Range | Hardware Requirement | Setup Complexity | Compatibility |
+|---|---|---|---|---|---|---|
+| WiFi | 🟡 Medium–High | 🔴 High | 🟡 Medium (50 - 100 m) | 🟢 Most ESP modules  | 🟢 Easy | 🟢 Wide |
+| Bluetooth Classic | 🟡 Low–Medium | 🟡 Medium | 🔴 Short (10 m) | 🟢 Most ESP modules | 🟡 Medium | 🟢 Wide |
+| Bluetooth Low Energy (BLE) | 🟢 Low | 🟢 Very Low | 🔴 Short (10 m) | 🟢 Built-in on many ESP modules | 🟡 Medium–High | 🟢 Wide |
+| ESP-NOW | 🟢 Very Low | 🟡 Low–Medium | 🟡 Medium (50 - 100 m) | 🟢 ESP Family device (with on board WiFi) | 🟢 Very Easy | 🔴 ESP only |
+| LoRa / LoRaWAN | 🔴 Medium–High | 🟢 Very Low | 🟢 Very Long (2 - 15 km)| 🔴 Requires external LoRa module | 🟡 Medium | 🟡 MCU independent |
+| Zigbee | 🟢 Low–Medium | 🟢 Low | 🟡 Medium (10 - 100 m) | 🟡 Requires Zigbee radio module | 🟡 Medium | 🟡 Zigbee ecosystem |
+| Thread | 🟢 Low | 🟢 Low | 🟡 Medium (10 - 50 m) | 🔴 Requires Thread-capable radio | 🟡 Medium–High | 🟡 Thread / Matter ecosystem |
+
+Given that the vessel spans 10 - 13 m in length, and the ESP32s are placed at different locations on the vessel, ESP-Now satisfies almost all the requirements except for compatibility, which in the master-slave setup, only 1 node need to be wired to the raspberry pi.
+
 
 [![Proa Local Server Network Framework](./images/Data%20Flow/Framework.png)](./images/Data%20Flow/)
 
@@ -21,27 +78,82 @@ Both Serial and ESP-NOW allows for bi-communication, allowing the raspberry pi t
 [Template for communicating with the master node](./firmware/ESP32/template_sender_firmware//). Note that the mac address need to be changed to the master node's mac address in order for the ESP32 to send data to the master node.
 
 
-# Code Structure
+# Technology Stack
 
-ExpressJs backend api + Serial reading
+ExpressJs backend with direct connection to the master ESP32 Node via Serial communication.
 
-React frontend with MUI dashboard template
+React frontend for real time data visualization and device control.
 
-- https://github.com/mui/material-ui/tree/v9.0.1/docs/data/material/getting-started/templates/dashboard
-- A shit template that mixes ts, js and tsx, jsx and poor code organisation
+## Frontend & Backend Communication
+
+- Access to the web application via the local network on port 4000.
+
+- Real time console management in dev panel via WebSocket & xterm to the React frontend running on port 3001 for communication
+
+- Data streaming from backend to frontend via a one-way Server Side Event (SSE) connection for real time data visualization.
+
+- API endpoint for ad-hoc commands / data retrieval from the backend to the React frontend.
+
+- API endpoint with middleware for authentication and authorization for device control and access to dev panel.
+
+# Backend Structure
+
+Backend structure is kept simple as this meant to mimic a control panel and data visualisation dashboard instead of a fullstack web application. Only basic security and authentication is implemented for the dev panel via middleware & JWT, while the rest of the backend is open to the local network.
+
+## Folder Structure
+- Handler folder for handling different data streams
+    - Receiving raw bytes from the master ESP32 node, parsing it, before handing it to the appropriate handler for processing and storage in the database.
+    - Handler for sending commands to the master ESP32 node via Serial communication.
+    - Sync data with cloud database (Supabase - Currently disabled) when internet connection is available.
+    - Transmit messages (status, errors, warnings) to the React frontend via SSE for real time visualization.
+    - Receives command from dev panel from the frontend (connect to wifi, update repo, configure running mode, etc.) and execute it on the backend.
+- Lib for custom functions
+    - (Extended) Kalman filter implementation on Javascript
+    - KCL Corrector algorithm
+- Scripts folder for handling server management (Following npm commands require you to be in the backend folder)
+    - Automatic building of frontend into backend for deployment (`npm run rebuild`)
+    - Automatic restart of backend after pulling repo from github (`npm run start:all`)
+    - Download map tiles for offline usage (`npm run download:map`)
+    - Automatic zipping and unzipping map tiles when building / downloading
+
+# Frontend Structure
+
+React frontend with MUI dashboard [template](https://github.com/mui/material-ui/tree/v9.0.1/docs/data/material/getting-started/templates/dashboard).
+
+Admin dashboard template used for data visualization and device control, with a dev panel for debugging and testing purposes.
+
+- Each component resides in its own folder with "index.js" as the main entry point, and "styles.js" for styling. The components are organized into folders based on how they will be rendered (e.g. Dev Panel > Tabs > Database Tab > index.js).
+
+- Server Side Event (SSE) for real time data streaming collected in "Dashboard.tsx" and passed down to the appropriate component for rendering (add more eventlisteners for different data sources).
+
+## Steps to add new tabs:
+1. Create the tab component in "components > MainBody".
+2. Add on to the "mainContent" state in "Dashboard.tsx".
+3. Add a new component to the main body.
+4. Add to list item in "Sidebar/MenuContent.jsx" for the new tab to be rendered and selected in the sidebar.
 
 
-# Proa Local Server Network — Step by step Setup Guide
+## Dev panel control
+- To access control of the ESP32 devices (strain / IMU), option will only be unlocked in the original tab after loging into the dev panel. 
+- Internet: Connect to a Wi-Fi network (Does not work with some device hotspots due to mismatch of bandwidth of the device and external wifi adapter)
+- Console: Direct access to the backend console for debugging and testing purposes.
+- Server: Switch between Test and Normal mode, update the repo (requires internet connection), and restart the server.
+- Database: View the database and export it to a CSV file for analysis.
+- Logout: Logout
+
+
+# Raspberry Pi 4 Setup 
 
 ## Part 1: Running the App
 
 1. `cd` into `PROA_LOCAL_SERVER_NETWORK`.
 2. Ensure npm is installed on your system.
 3. Run `npm run install:yarn`.
-4. Run `yarn start:all`.
+4. Run `npm run rebuild`.
+5. Run `npm run start:all`.
    - This automatically builds the React app and runs it with Node.js.
-5. Open `http://localhost:4000` in your browser.
-6. Dev panel access: username=admin   password=admin
+6. Open `http://localhost:4000` in your browser.
+7. Dev panel access: username=admin   password=admin
 
 ---
 
