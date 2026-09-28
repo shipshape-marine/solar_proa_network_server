@@ -7,11 +7,7 @@ import Stack from '@mui/material/Stack';
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import AnalyticsRoundedIcon from '@mui/icons-material/AnalyticsRounded';
 import PeopleRoundedIcon from '@mui/icons-material/PeopleRounded';
-import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
-import InfoRoundedIcon from '@mui/icons-material/InfoRounded';
 import ImportantDevicesIcon from '@mui/icons-material/ImportantDevices';
-import { useEffect, useState } from 'react';
-
 import StraightenIcon from '@mui/icons-material/Straighten';
 import MapRoundedIcon from '@mui/icons-material/MapRounded';
 
@@ -25,22 +21,15 @@ const mainListItems = [
 
 const secondaryListItems = [
     { text: 'Dev Panel', icon: <ImportantDevicesIcon /> },
-    { text: 'Settings', icon: <SettingsRoundedIcon /> },
-    { text: 'About', icon: <InfoRoundedIcon /> },
 ];
 
 export default function MenuContent({ selectedContent, setSelectContent }) {
-    const [selectedIndex, setSelectedIndex] = useState(0);
+    const selectedIndex = selectedContent ?? 0;
 
     // Secondary list items will be off set by main content to simplify switching and highlighting tab
     function handleSelect(index) { 
-        setSelectedIndex(index);
         setSelectContent(index);
     }
-
-    useEffect(() => {
-        setSelectedIndex(selectedContent);
-    }, [selectedContent])
 
     return (
         <Stack sx={{ flexGrow: 1, p: 1, justifyContent: 'space-between' }}>

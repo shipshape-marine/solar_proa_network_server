@@ -36,7 +36,7 @@ function AngleDisplay({ label, value, unit = "\u00B0" }: { label: string; value:
     return (
         <Box sx={{ textAlign: 'center', minWidth: 100 }}>
             <Typography variant="caption" color="text.secondary">{label}</Typography>
-            <Typography variant="h5" fontWeight="bold">
+            <Typography variant="h5" sx={{ fontWeight: "bold" }}>
                 {value !== null ? value.toFixed(2) : "--"}{unit}
             </Typography>
         </Box>

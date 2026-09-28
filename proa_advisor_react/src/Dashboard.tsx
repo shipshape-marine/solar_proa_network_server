@@ -8,7 +8,6 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import AppNavbar from './components/NavBar/AppNavbar';
 import Header from './components/Header/Header';
-import MainGrid from './components/MainBody/TemplateGrid';
 import SideMenu from './components/Sidebar/SideMenu';
 import AppTheme from './theme/AppTheme';
 import {
@@ -22,7 +21,6 @@ import Overview from './components/MainBody/Overview';
 import PowerManagement from './components/MainBody/PowerManagement';
 import StrainManagement from './components/MainBody/StrainManagement';
 import MastMonitor from './components/MainBody/MastMonitor';
-import Settings from './components/Settings';
 import DevPanel from './components/Dev Panel';
 import MessageBlock from './components/FloatingMessage/MessageBlock';
 import './data_type/message';
@@ -41,7 +39,6 @@ const xThemeComponents = {
 };
 
 export default function Dashboard(props: { disableCustomTheme?: boolean }) {
-    //const [mainContent, setMainContent] = useState(-1);       // Use this for referencing the template
     const [mainContent, setMainContent] = useState(0);
     const [powerData, setPowerData] = useState<PowerData | null>(null);
     const [messages, setMessages] = useState<MessageData[]>([]);  // For floating messages
@@ -144,13 +141,10 @@ export default function Dashboard(props: { disableCustomTheme?: boolean }) {
                                             mainContent === 3 ? 'Mast Monitor' :
                                                 mainContent === 4 ? 'GPS Route' :
                                                     mainContent === 5 ? 'Dev Panel' :
-                                                        mainContent === 6 ? 'Settings' :
-                                                            mainContent === 7 ? 'About' :
                                             'Unknown'} />
                         <MessageBlock Messages={messages} />
                         <Stack sx={{ width: "100%", height: "100%" }}>
-                            {mainContent === -1 ? MainGrid() :
-                                mainContent === 0 ? <Overview powerData={powerData} strainData={strainData} /> :
+                            {mainContent === 0 ? <Overview powerData={powerData} strainData={strainData} /> :
                                     mainContent === 1 ? <PowerManagement data={powerData} /> :
                                         mainContent === 2 ? <StrainManagement data={strainData} /> :
                                             mainContent === 3 ? <MastMonitor data={imuData} /> :
@@ -160,8 +154,6 @@ export default function Dashboard(props: { disableCustomTheme?: boolean }) {
                                                     </Suspense>
                                                 ) :
                                                     mainContent === 5 ? <DevPanel /> :
-                                                        mainContent === 6 ? <Settings /> :
-                                                            mainContent === 7 ? <div>About</div> :
                                         <div>Unknown Content</div>
                             }
                         </Stack>

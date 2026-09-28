@@ -10,7 +10,6 @@ import SideMenuMobile from '../Sidebar/SideMenuMobile';
 import MenuButton from '../Header/MenuButton';
 import ColorModeIconDropdown from '../../theme/ColorModeIconDropdown';
 import CircularIcon from '../CircularIcon';
-import { useEffect } from 'react';
 
 const Toolbar = styled(MuiToolbar)({
     width: '100%',

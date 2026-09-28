@@ -1,6 +1,6 @@
 import BatteryGauge from 'react-battery-gauge'
 import "../../../data_type/power"
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Grid from '@mui/material/Grid';
 import Card from '@mui/material/Card';
 
