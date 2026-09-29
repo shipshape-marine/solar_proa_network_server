@@ -2,8 +2,8 @@ const { Battery2RCEKF } = require("./kalman_filter_helper/filter")
 const { CurrentKCLCorrector } = require("./kalman_filter_helper/kcl_corrector")
 const { adc_to_current, adc_to_voltage } = require("../adc_converter")
 const { load_battery_noise, load_battery_constants, diag } = require('./kalman_filter_helper/helper');
-const { insertMainBatteryState, insertAlternateBatteryState, insertSensorReadings, insertKCLCorrectionState, insertSocSensorData, insertSocSensorDataBulk, insertAllStatesAndReadings, getLastMainBatteryState, getLastAlternateBatteryState, getLastKCLCorrectionState, getRunId, createOrUpdateRunInfo, getRunInfo } = require("../../model/db")
-const { getBatteryRC_OCV } = require("../../model/db");
+const { insertSocSensorDataBulk, insertAllStatesAndReadings, getLastMainBatteryState, getLastAlternateBatteryState, getLastKCLCorrectionState, getRunId, createOrUpdateRunInfo, getRunInfo } = require("../../model/power_management_db")
+const { getBatteryRC_OCV } = require("../../model/power_management_db");
 const { write_to_clients } = require('../../handler/client_transmission')
 const dotenv = require('dotenv');
 dotenv.config();

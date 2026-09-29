@@ -1,7 +1,7 @@
 'use strict';
 
 const { KalmanFilter } = require('kalman-filter');
-const { getBatteryRC_SoC } = require('../../../model/db');
+const { getBatteryRC_SoC } = require('../../../model/power_management_db');
 const { diag } = require('./helper');
 
 function clamp(x, lo, hi) {

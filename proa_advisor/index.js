@@ -27,7 +27,7 @@ app.use("/map-tiles", express.static(mapTilesPath, {
 app.use(express.static(path.join(__dirname, 'public')));
 const { add_client, get_clients, remove_client } = require("./handler/client_transmission");
 const { getCurrentRunId } = require("./lib/Kalman Filter/kalman_filter");
-const { populateInitalChartData } = require('./model/db');
+const { populateInitalChartData } = require('./model/power_management_db');
 const { getIMUDataByRunId } = require('./model/imu_db');
 const { getStrainDataByRunId } = require('./model/strain_db');
 const { getGPSDataByRunId } = require('./model/gps_db');
