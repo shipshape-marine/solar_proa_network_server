@@ -7,3 +7,5 @@ package-lock.json
 proa_advisor/proa.db-shm
 proa_advisor/proa.db-wal
 proa_advisor/map-tiles/
+
+graphify-out/

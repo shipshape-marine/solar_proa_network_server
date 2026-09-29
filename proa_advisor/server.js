@@ -6,6 +6,7 @@ const HARD_STOP_SUPABASE = true;
 const { startDB, insertBatteryState } = require('./model/power_management_models');
 const { initializeIMUTable } = require('./model/imu_models');
 const { initializeStrainTable } = require('./model/strain_models');
+const { initializeGPSTable } = require('./model/gps_models');
 const { run_test } = require("./lib/Kalman Filter/ekf_test")
 const { getCurrentRunId, setAlternateBatteryType, setMainBatteryType } = require("./lib/Kalman Filter/kalman_filter");
 const { startSerialReader } = require('./handler/serial_reader/serialReader');
@@ -21,6 +22,8 @@ function startBackend() {
         return initializeIMUTable();
     }).then(() => {
         return initializeStrainTable();
+    }).then(() => {
+        return initializeGPSTable();
     }).then(() => {
         //return insertBatteryState(battery_type = "LiNMC", tableName = "MainRCMapping", override = OVERRIDE_DB);
         setMainBatteryType(process.env.MAIN_BATTERY_TYPE);

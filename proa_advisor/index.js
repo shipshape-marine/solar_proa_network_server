@@ -30,10 +30,12 @@ const { getCurrentRunId } = require("./lib/Kalman Filter/kalman_filter");
 const { populateInitalChartData } = require('./model/db');
 const { getIMUDataByRunId } = require('./model/imu_db');
 const { getStrainDataByRunId } = require('./model/strain_db');
+const { getGPSDataByRunId } = require('./model/gps_db');
 // Same pattern as getCurrentRunId for power: the run_id is owned by the writer
 // and shared, not re-derived per request.
 const { getCurrentIMURunId } = require("./handler/serial_reader/components/imu_data_parser");
 const { getCurrentStrainRunId } = require("./handler/serial_reader/components/strain_data_parser");
+const { getCurrentGPSRunId } = require("./handler/serial_reader/components/gps_data_parser");
 const { requestCommand } = require('./handler/serial_writer/serial_writer');
 const { startBackend } = require("./server");
 const { connectToWifi } = require("./handler/internet_connection/wifi_manager")
@@ -148,6 +150,17 @@ app.get("/initial_strain_data", async (req, res) => {
     } catch (error) {
         console.error("Error fetching initial strain data:", error);
         res.status(500).send("Error fetching initial strain data");
+    }
+});
+
+app.get("/initial_gps_data", async (req, res) => {
+    try {
+        const run_id = await getCurrentGPSRunId();
+        const data = await getGPSDataByRunId(run_id, 2000);
+        res.json(data);
+    } catch (error) {
+        console.error("Error fetching initial GPS data:", error);
+        res.status(500).send("Error fetching initial GPS data");
     }
 });
 

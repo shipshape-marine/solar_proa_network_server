@@ -7,7 +7,7 @@ const DB_PATH = path.resolve(__dirname, "..", "proa.db");
 let activeDownload = null;
 
 /**
- * The three sensor streams, each with its own table and its own run_id counter.
+ * Each sensor stream has its own table and run_id counter.
  *
  * run_id is NOT shared across these tables: run 1 in StrainReadings is a
  * different time window from run 1 in SOCSensor. Every lookup here is therefore
@@ -79,6 +79,26 @@ const SENSOR_TABLES = {
             "adjustedReading",
         ],
     },
+    gps: {
+        label: "GPS",
+        table: "GPSReadings",
+        fileStem: "GPSReadings",
+        columns: [
+            "id",
+            "timestamp",
+            "recv_ms",
+            "run_id",
+            "counter",
+            "latitude",
+            "longitude",
+            "altitude",
+            "speed",
+            "course",
+            "hdop",
+            "satellites",
+            "valid",
+        ],
+    },
 };
 
 class DownloadInProgressError extends Error {
@@ -91,7 +111,7 @@ class DownloadInProgressError extends Error {
 
 /**
  * Validate a caller-supplied sensor type against the registry.
- * @param {string} value "power" | "imu" | "strain"
+ * @param {string} value "power" | "imu" | "strain" | "gps"
  */
 function normalizeSensorKey(value) {
     const key = String(value ?? "").trim().toLowerCase();
@@ -229,7 +249,7 @@ function normalizeRunId(value) {
 /**
  * Per-run summaries for one sensor stream, newest run first.
  *
- * @param {string} sensorKey "power" | "imu" | "strain"
+ * @param {string} sensorKey "power" | "imu" | "strain" | "gps"
  * @returns {Promise<Array<{run_id:number,start_row_id:number,start_datetime:string,row_count:number}>>}
  */
 async function getRunSummaries(sensorKey) {

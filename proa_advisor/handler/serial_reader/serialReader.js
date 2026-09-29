@@ -5,7 +5,7 @@ const { parsePowerData, consumePowerQueue } = require('./components/power_data_p
 const { parseSensorPowerData } = require('./components/sensor_power_parser');
 const { parseIMUData, consumeIMUQueue, flushIMUQueue } = require('./components/imu_data_parser');
 const { parseStrainData, consumeStrainQueue, flushStrainQueue } = require('./components/strain_data_parser');
-const { parseGPSData } = require('./components/gps_data_parser');
+const { parseGPSData, consumeGPSQueue, flushGPSQueue } = require('./components/gps_data_parser');
 const PACKET_BYTES = 4 + 2 + 4 + (8 * 2) + 2; // Fix at 28 bytes
 const POWER_HEADER = 'PWER';
 const POWER_HEADER_BUFFER = Buffer.from(POWER_HEADER, 'ascii');
@@ -181,6 +181,7 @@ function processBuffer() {
     // header seen meant their samples were never written to the DB.
     consumeIMUQueue();
     consumeStrainQueue();
+    consumeGPSQueue();
 }
 
 async function startSerialReader() {
@@ -218,6 +219,7 @@ async function startSerialReader() {
         // disconnect does not silently drop the tail of the run.
         flushIMUQueue();
         flushStrainQueue();
+        flushGPSQueue();
         setTimeout(startSerialReader, 5000);
     });
 

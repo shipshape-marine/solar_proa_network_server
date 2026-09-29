@@ -14,16 +14,17 @@ type SensorRunSummary = {
 };
 
 /**
- * The three sensor streams each keep their own run_id counter, so every section
+ * Each sensor stream keeps its own run_id counter, so every section
  * lists and downloads runs independently. "Power 2" and "Strain 2" are unrelated
  * time windows, which is why the run_id is always shown next to its own type.
  */
-type SensorType = 'power' | 'imu' | 'strain';
+type SensorType = 'power' | 'imu' | 'strain' | 'gps';
 
 const SENSORS: { type: SensorType; label: string; table: string }[] = [
     { type: 'power', label: 'Power', table: 'SOCSensor' },
     { type: 'imu', label: 'IMU', table: 'IMUReadings' },
     { type: 'strain', label: 'Strain', table: 'StrainReadings' },
+    { type: 'gps', label: 'GPS', table: 'GPSReadings' },
 ];
 
 const LOCALHOST_API_BASE_URL = 'http://localhost:4000';
@@ -100,7 +101,7 @@ function formatRowCount(count: number) {
 }
 
 /**
- * One independent Power / IMU / Strain block: run picker plus CSV download.
+ * One independent sensor block: run picker plus CSV download.
  *
  * Each block owns its own loading, selection and status state so a failure or a
  * slow download in one section never blanks out the other two.

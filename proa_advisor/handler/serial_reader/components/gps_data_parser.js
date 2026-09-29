@@ -1,4 +1,41 @@
 const { write_to_clients } = require("../../client_transmission");
+const { insertGPSDataBulk, getLatestGPSRunId } = require("../../../model/gps_db");
+
+const BULK_INSERT_SIZE = 50;
+const FLUSH_INTERVAL_MS = 2000;
+const MAX_QUEUE = 5000;
+
+const gpsQueue = [];
+let gpsRunId = null;
+let runIdPromise = null;
+let consuming = false;
+let flushTimer = null;
+
+async function getCurrentGPSRunId() {
+    if (gpsRunId !== null) return gpsRunId;
+    if (!runIdPromise) {
+        runIdPromise = getLatestGPSRunId()
+            .then(({ run_id, is_new }) => {
+                gpsRunId = run_id;
+                console.log(`[GPS] Current run_id: ${run_id}, is_new: ${is_new}`);
+                return run_id;
+            })
+            .catch((err) => {
+                console.error('[GPS] Failed to resolve run_id, defaulting to 1:', err.message);
+                gpsRunId = 1;
+                return 1;
+            });
+    }
+    return runIdPromise;
+}
+
+function ensureFlushTimer() {
+    if (flushTimer) return;
+    flushTimer = setInterval(() => {
+        consumeGPSQueue(true);
+    }, FLUSH_INTERVAL_MS);
+    flushTimer.unref?.();
+}
 
 function checksum16Bytes(buf) {
     let sum = 0;
@@ -77,11 +114,40 @@ function parseGPSData(recvBuf, packet_bytes, packetSkipped = 0) {
         console.warn(`[GPS] No valid fix at counter ${counter}; skipped packets: ${packetSkipped}`);
     }
     write_to_clients("gps", telemetry);
+    gpsQueue.push(telemetry);
+    ensureFlushTimer();
 
     return recvBuf.subarray(packet_bytes); // Return the remaining buffer after processing the packet
 }
 
+async function consumeGPSQueue(force = false) {
+    if (consuming || gpsQueue.length === 0) return;
+    if (!force && gpsQueue.length < BULK_INSERT_SIZE) return;
+
+    consuming = true;
+    const batch = gpsQueue.splice(0, gpsQueue.length);
+    try {
+        const runId = await getCurrentGPSRunId();
+        await insertGPSDataBulk(batch.map((sample) => ({ ...sample, run_id: runId })));
+    } catch (err) {
+        console.error('[GPS] Bulk insert error:', err.message);
+        if (gpsQueue.length + batch.length <= MAX_QUEUE) {
+            gpsQueue.unshift(...batch);
+        } else {
+            console.error(`[GPS] Backlog over ${MAX_QUEUE}, dropping ${batch.length} rows.`);
+        }
+    } finally {
+        consuming = false;
+    }
+}
+
+async function flushGPSQueue() {
+    return consumeGPSQueue(true);
+}
 
 module.exports = {
-    parseGPSData
+    parseGPSData,
+    consumeGPSQueue,
+    flushGPSQueue,
+    getCurrentGPSRunId,
 };

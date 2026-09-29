@@ -48,6 +48,47 @@ export default function Dashboard(props: { disableCustomTheme?: boolean }) {
     const [gpsTrack, setGpsTrack] = useState<GPSData[]>([]);
 
     useEffect(() => {
+        let cancelled = false;
+
+        async function loadInitialGPSData() {
+            const request = async (url: string) => {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Initial GPS data request failed with HTTP ${response.status}`);
+                }
+                return response.json() as Promise<GPSData[]>;
+            };
+
+            try {
+                let rows: GPSData[];
+                try {
+                    rows = await request("/initial_gps_data");
+                } catch (error) {
+                    console.warn("Initial GPS data request failed; trying localhost backend:", error);
+                    rows = await request("http://localhost:4000/initial_gps_data");
+                }
+
+                if (cancelled || rows.length === 0) {
+                    return;
+                }
+
+                const validRows = rows.filter((row) => row.valid);
+                setGpsData(rows[rows.length - 1]);
+                setGpsTrack(validRows.slice(-10000));
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to load initial GPS data:", error);
+                }
+            }
+        }
+
+        loadInitialGPSData();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
         let eventSource: EventSource | null = null;
         eventSource = new EventSource("/data_stream");
         eventSource.onopen = () => {
