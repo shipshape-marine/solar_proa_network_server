@@ -3,11 +3,14 @@
   - [Electrical Simulation and Validation](#electrical-simulation-and-validation)
   - [PCB Printing and Assembly](#pcb-printing-and-assembly)
 - [Framework](#framework)
+  - [Microcontroller Modules](#microcontroller-modules)
   - [Communication Protocols Choice](#communication-protocols-choice)
+  - [Network Visualization](#network-visualization)
 - [Technology Stack](#technology-stack)
   - [Frontend & Backend Communication](#frontend--backend-communication)
 - [Backend Structure](#backend-structure)
   - [Folder Structure](#folder-structure)
+  - [Steps to Add New Data Stream Handler](#steps-to-add-new-data-stream-handler)
 - [Frontend Structure](#frontend-structure)
   - [Steps to add new tabs](#steps-to-add-new-tabs)
   - [Dev panel control](#dev-panel-control)
@@ -24,6 +27,7 @@
     - [2.8 Set Up Auto-Start on Boot](#28-set-up-auto-start-on-boot)
     - [2.9 Auto-Redirect Port 80 to the App (Port 4000)](#29-auto-redirect-port-80-to-the-app-port-4000)
     - [2.10 Note: AP vs. Wi-Fi Receiver Mode](#210-note-ap-vs-wi-fi-receiver-mode)
+- [Final Notes](#final-notes)
 
 
 # Hardware
@@ -44,16 +48,31 @@ Simulation and validation is done on a parameterised model of the electrical sys
 
 [![Proa Local Server Network Schema](./images/Final%20Build/Full%20Electrical%20Build.png)](./images/Final%20Build/)
 
-## PCB Printing and Assembly
+## PCB Printing and Assembly 
+
+For power management board - ESP32 C3 + ADS8688 only
+
 KiCad build file [here](./Hardware%20Schematics/ADC%20Power%20Sensor%20Design/).
 
 BOM file might be outdated. KiCad or other PCB design software often have plugins to query available components and prices from PCB manufacturers (e.g. JLCPCB). Please check with your PCB manufacturer for the latest prices and availability.
 
 [![Power Management Board](./images/Power%20Management%20PCB/ADS8688%20Reader.png)](./images/Power%20Management%20PCB/)
 
+
 # Framework
 
 Network of ESP32 microcontrollers with a Raspberry Pi 4 acting as a local server. ESP32 reading the sensors (slave) communicates bi-directionally via ESP-NOW where the main (Master) ESP32 sends the data to the raspberry pi via Serial communication.
+
+## Microcontroller Modules
+
+| Purpose | Module | External Module | 
+|---|---|---|
+| Main power data collection | ESP32 C3 | ADS8688 16-bit ADC |
+| IMU data collection | Seeed NRF52840 sense | Integrated IMU |
+| Strain data collection | ESP32 WROOM-32D | NAU7802 24-bit ADC |
+| Auxiliary power data collection | - | INA219 Shunt |
+| GPS data collection | - | ATGM336H |
+| Intermediate data collection | ESP32 C3 | GPS + Shunt + IMU (BLE) |
 
 ## Communication Protocols Choice
 ESP-NOW used for its low latency and low power consumption while being very easy to setup (<10 lines to setup + 2 function that runs when receiving or sending data), while Serial is used for its reliability and ease of use.
@@ -70,10 +89,12 @@ ESP-NOW used for its low latency and low power consumption while being very easy
 
 Given that the vessel spans 10 - 13 m in length, and the ESP32s are placed at different locations on the vessel, ESP-Now satisfies almost all the requirements except for compatibility, which in the master-slave setup, only 1 node need to be wired to the raspberry pi.
 
-
+## Network Visualization
 [![Proa Local Server Network Framework](./images/Data%20Flow/Framework.png)](./images/Data%20Flow/)
 
 Both Serial and ESP-NOW allows for bi-communication, allowing the raspberry pi to send command (zeroing, start, stop, etc.) to specific ESP32s (IMU), while the ESP32s sends data to the raspberry pi at the same time.
+
+Although wireless communication is not as reliable as wired communication, where packet losss, sniffing, signal interference and range can affect the transmission, the data used is not critical for the operation. Additional measures such as encryption, error correction and data validation can be implemented to improve the reliability of the communication but is not fully / not implemented in this project.
 
 [Template for communicating with the master node](./firmware/ESP32/template_sender_firmware//). Note that the mac address need to be changed to the master node's mac address in order for the ESP32 to send data to the master node.
 
@@ -115,12 +136,35 @@ Backend structure is kept simple as this meant to mimic a control panel and data
     - Automatic restart of backend after pulling repo from github (`npm run start:all`)
     - Download map tiles for offline usage (`npm run download:map`)
     - Automatic zipping and unzipping map tiles when building / downloading
+- Model folder pslit into 2 file for each table
+    - {__}_models.js for defining the table structure and schema
+    - {__}_db.js for defining the functions to interact with the table (CRUD operations)
+    - Exception: Power management requires multiple table and initialization + high speed data streaming.
+    - Write Lock implemented for handling frontend download of database while still writing to db using a queue.
+
+## Steps to Add New Data Stream Handler
+1. Create a new handler file in the handler > serial reader > components folder.
+2. Use other handler as a template to parse, validate and queue bytes for processing and storage in the database.
+3. Add to serialReader.js for the new handler to be called when receiving data from the master ESP32 node.
+4. Add to the appropriate model for the new data stream to be stored in the database.
+5. Add new api routes if needed for: session restore, config fetching, etc.
+6. Add to lib if more complex data processing is needed (e.g. filtering, smoothing, etc.)
+
+## Kalman Filter Implementation
+
+Extended Kalman filter used in SoC estimation for the 2 battery bank system. The filter is implemented in Javascript and can be found in the lib folder. The filter is used to estimate the state of charge (SoC) of the battery bank based on the voltage and current measurements from the power management board.
+
+3 filters are running simultaneously. 1 for each battery bank and 1 for the 4 Hall Effect current sensor to correct drifting using Kirchhoff's Current Law (KCL).
+
+## Test Mode
+
+Test mode is only implemented for power management sensor data stream. Setting test mode to true in .env or in the frontend dev panel will simulate the power management data from previous charging and discharge cycles. 
 
 # Frontend Structure
 
 React frontend with MUI dashboard [template](https://github.com/mui/material-ui/tree/v9.0.1/docs/data/material/getting-started/templates/dashboard).
 
-Admin dashboard template used for data visualization and device control, with a dev panel for debugging and testing purposes.
+Admin dashboard template used for data visualization and device control, with a dev panel for debugging and testing purposes (some config and mac address of microcontrollers transmited over api unencrypted as it is not a critical infrastructure).
 
 - Each component resides in its own folder with "index.js" as the main entry point, and "styles.js" for styling. The components are organized into folders based on how they will be rendered (e.g. Dev Panel > Tabs > Database Tab > index.js).
 
@@ -146,14 +190,15 @@ Admin dashboard template used for data visualization and device control, with a 
 
 ## Part 1: Running the App
 
-1. `cd` into `PROA_LOCAL_SERVER_NETWORK`.
-2. Ensure npm is installed on your system.
-3. Run `npm run install:yarn`.
-4. Run `npm run rebuild`.
-5. Run `npm run start:all`.
+1. Copy .env-example to .env
+2. `cd` into `PROA_LOCAL_SERVER_NETWORK`.
+3. Ensure npm is installed on your system.
+4. Run `npm run install:yarn`.
+5. Run `npm run rebuild`.
+6. Run `npm run start:all`.
    - This automatically builds the React app and runs it with Node.js.
-6. Open `http://localhost:4000` in your browser.
-7. Dev panel access: username=admin   password=admin
+7. Open `http://localhost:4000` in your browser.
+8. Dev panel access: username=admin   password=admin
 
 ---
 
@@ -450,3 +495,11 @@ The Wi-Fi chip can only act as **either** an access point **or** a receiver at o
    ```bash
    sudo nmcli device wifi connect "YourSSID" password "YourPassword" ifname wlan1
    ```
+
+# Final Notes
+
+- While raspberry pi 4 is used as the server, the setup can be ran on any windows / linux machine, as long as the master esp32 node can be physically connected to the machine
+- A stronger computer / mini pc can be used to run the server instead for a larger vessel where more users are expected to connect to the server at the same time, or for a more complex system with more sensors and data streams and AI processing or sailing / electrical "expert" trained model can be implemented to provide real time feedback and control of the vessel.
+- For production use / future development, proper security measures, such as ESP-now encryption, encrypted data (on top of current JWT authentication), and secure communication protocols (HTTPS, WSS) should be implemented to protect the system from potential attacks and unauthorized access.
+- As more sensor data is added, proper routing and folder sturcture should be implemented. Currently, all api end points are dumped into index.js as there is not a lot yet. 
+- Test mode is currently limited to power management data stream but should be extended to other data stream as data will be collected into the db and be downloadable for future testing.
