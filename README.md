@@ -117,6 +117,25 @@ React frontend for real time data visualization and device control.
 
 - API endpoint with middleware for authentication and authorization for device control and access to dev panel.
 
+## Offline map and bathymetry layers
+
+The GPS Route map loads its base tiles from `/map-tiles/{z}/{x}/{y}.png` and its map bounds from `/map_config`. Optional bathymetry data is discovered from `proa_advisor/model/bathymetry/` by matching a pair of files with the same prefix:
+
+- `{prefix}_ascii.asc` - WGS84 ESRI ASCII grid used for coordinate/depth sampling.
+- `{prefix}_png_cm.png` - color-map PNG rendered over the base tiles.
+
+To set up
+1. Goto [OpenTopoMap](https://opentopomap.org) or other map provider and record the coordinates of the top left and bottom right corners of the area you want. 
+2. Fill up the details into .env file and run `npm run download:map` to download the map tiles for offline usage (set other config such as download source and zoom level in .env file).
+3. Goto [GEBCO](https://download.gebco.net/), click on "Select subset option" and fill up the coords (North, South : Lat, East, West : Long) to select the region.
+4. Select Bathymetry Layer, ASCII and Color Map data to export. 
+5. Unzip and paste the files into `proa_advisor/model/bathymetry/`.
+6. Restart the backend to load the new bathymetry data.
+
+Bathymetry is optional. If the paired files are missing or invalid, the backend logs a warning, the layer is reported as unavailable, and the map continues to render its base tiles and GPS route without the overlay. 
+
+**Note: GEBCO data must not be used for navigation or any purpose relating to safety at sea.**
+
 # Backend Structure
 
 Backend structure is kept simple as this meant to mimic a control panel and data visualisation dashboard instead of a fullstack web application. Only basic security and authentication is implemented for the dev panel via middleware & JWT, while the rest of the backend is open to the local network.

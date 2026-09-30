@@ -46,6 +46,11 @@ const { closeAllConnections } = require("./handler/terminal_socket/ws");
 const { updateRepo } = require("./handler/repository/simple_git");
 const { streamSOCSensorCsvByRun, streamSensorCsvByRun, normalizeRowId, normalizeRunId, normalizeSensorKey, getSOCSensorRunSummaries, getRunSummaries, getSensorLabel, DownloadInProgressError } = require("./handler/database_download");
 const { getMapConfig } = require("./handler/map_config");
+const {
+    getBathymetryConfig,
+    getBathymetryImagePath,
+    lookupBathymetry,
+} = require("./handler/bathymetry");
 
 const nodeMacAddresses = Object.freeze({
     imu: "88:56:A6:6C:F0:04",
@@ -101,6 +106,49 @@ app.get("/map_config", (req, res) => {
     } catch (error) {
         console.error("Error loading map configuration:", error);
         res.status(500).json({ message: "Map configuration is invalid." });
+    }
+});
+
+app.get("/bathymetry_config", (req, res) => {
+    res.json(getBathymetryConfig());
+});
+
+app.get("/bathymetry/image", (req, res) => {
+    const imagePath = getBathymetryImagePath();
+    if (!imagePath) {
+        return res.status(404).json({ message: "Bathymetry image is unavailable." });
+    }
+
+    return res.sendFile(imagePath, {
+        maxAge: "1d",
+        etag: true,
+    }, (error) => {
+        if (error && !res.headersSent) {
+            console.error("Error serving bathymetry image:", error);
+            res.status(error.statusCode || 500).json({ message: "Unable to serve bathymetry image." });
+        }
+    });
+});
+
+app.get("/bathymetry/depth", (req, res) => {
+    const latitude = Number(req.query.lat);
+    const longitude = Number(req.query.lng);
+
+    try {
+        return res.json(lookupBathymetry(latitude, longitude));
+    } catch (error) {
+        if (error.code === "BATHYMETRY_UNAVAILABLE") {
+            return res.status(503).json({ message: error.message });
+        }
+        if (error.code === "OUT_OF_BOUNDS") {
+            return res.status(404).json({ message: error.message, bounds: error.bounds });
+        }
+        if (error.code === "INVALID_COORDINATES") {
+            return res.status(400).json({ message: error.message });
+        }
+
+        console.error("Error looking up bathymetry depth:", error);
+        return res.status(500).json({ message: "Unable to look up bathymetry depth." });
     }
 });
 

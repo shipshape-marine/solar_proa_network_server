@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       '/map_config': 'http://localhost:4000',
       '/map-tiles': 'http://localhost:4000',
+      '/bathymetry_config': 'http://localhost:4000',
+      '/bathymetry': 'http://localhost:4000',
     },
   },
 })
