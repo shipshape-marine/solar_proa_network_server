@@ -32,7 +32,7 @@ const ENABLE_EKF_RESTORE            = process.env.ENABLE_EKF_RESTORE === 'true';
 const USE_NEW_RUN_ID                = process.env.USE_NEW_RUN_ID === 'true';
 const SAVE_STATES_TO_DB             = process.env.SAVE_STATES_TO_DB === 'true';
 const SAVE_ADC_READINGS_TO_DB       = process.env.SAVE_ADC_READINGS_TO_DB === 'true';
-const SAMPLE_INTERVAL_MS            = parseInt(process.env.SAMPLE_INTERVAL_MS) || 1000;       // Only for test data
+const SAMPLE_INTERVAL_MS            = 0;       // Only for test data
 let ekf_sample_count                = 0;
 let current_run_id                  = null;
 
@@ -188,7 +188,7 @@ async function onNewSample(sample, force_log = false, is_test = false) {
 
                 avg_kcl_noise.push(sigma_kcl);
                 const noise = { 
-                    voltage: sigma_v,
+                    voltage: sigma_v ** 2,
                     socProcess: loaded_noise ? loaded_noise.socProcess : 1e-22,
                     rcProcess: loaded_noise ? loaded_noise.rcProcess : 1e-22,
                 }

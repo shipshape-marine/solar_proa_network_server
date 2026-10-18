@@ -135,7 +135,7 @@ class Battery2RCEKF {
         });
 
         clampSocState(corrected);
-        log=false
+
         if (log) {
             console.log(`Previous corrected: ${this.previousCorrected ? this.previousCorrected.mean : 'null'}`);
         }
