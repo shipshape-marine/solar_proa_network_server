@@ -12,7 +12,7 @@ import "../../../data_type/power"
 4. Current Load, MPPT, Net Main, Net Alt (actual vs corrected)
 */
 
-const ARRAY_LENGTH = 1000;
+const ARRAY_LENGTH = 5000;
 
 export default function PowerManagement({data}: {data: PowerData | null}) {
     const [xData, setXData] = useState<number[]>([]);
@@ -171,7 +171,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
                 <p>Number of points: {displayDataLength}</p>
                 <Slider 
                     ref={lengthSliderRef}
-                    min={5} max={1000} step={5} 
+                    min={5} max={5000} step={5} 
                     valueLabelDisplay="auto" 
                     value={displayDataLength} 
                     onChange={(event, value) => setDisplayDataLength(value)} />
