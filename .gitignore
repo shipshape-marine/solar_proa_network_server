@@ -9,3 +9,4 @@ proa_advisor/proa.db-wal
 proa_advisor/map-tiles/
 
 graphify-out/
+.graphifyignore
