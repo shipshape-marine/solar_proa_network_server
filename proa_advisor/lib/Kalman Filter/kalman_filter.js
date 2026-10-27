@@ -285,16 +285,37 @@ async function onNewSample(sample, force_log = false, is_test = false) {
             return; // Wait until we have enough samples to compute median
         }
 
-        await updateFilter(
-            time_diff_window.reduce((a, b) => a + b, 0),
-            getMedian(mppt_out_window),
-            getMedian(load_in_window),
-            getMedian(batt1_net_window),
-            getMedian(batt2_net_window),
-            getMedian(batt1_v_window),
-            getMedian(batt2_v_window),
-            is_test
-        );
+        try {
+            // Check the values actually passed to the filter (window sum / medians), not the raw sample
+            const inputs = {
+                time_diff_us: time_diff_window.reduce((a, b) => a + b, 0),
+                mppt_out: getMedian(mppt_out_window),
+                load_in: getMedian(load_in_window),
+                batt1_net: getMedian(batt1_net_window),
+                batt2_net: getMedian(batt2_net_window),
+                batt1_v: getMedian(batt1_v_window),
+                batt2_v: getMedian(batt2_v_window),
+            };
+            const bad = Object.entries(inputs).filter(([, v]) => !Number.isFinite(v));
+            if (bad.length) {
+                console.warn('Skipping filter step, non-finite inputs:', inputs, {
+                    time_diff_window, mppt_out_window, load_in_window, batt1_net_window, batt2_net_window, batt1_v_window, batt2_v_window,
+                });
+            } else {
+                await updateFilter(
+                    inputs.time_diff_us,
+                    inputs.mppt_out,
+                    inputs.load_in,
+                    inputs.batt1_net,
+                    inputs.batt2_net,
+                    inputs.batt1_v,
+                    inputs.batt2_v,
+                    is_test
+                );
+            }
+        } catch (error) {
+            console.error('Error updating filter:', error);
+        }
 
         time_diff_window = [];
         mppt_out_window = [];
@@ -336,7 +357,7 @@ async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_ne
     isActive.bat1 = Math.abs(batt1_net) > KCL_CURRENT_THRESHOLD;
     isActive.bat2 = Math.abs(batt2_net) > KCL_CURRENT_THRESHOLD;
     kcl_corrector.clampNoise(isActive);
-
+    
     const { state, biases, currents, diagnostics } = kcl_corrector.update({
         dt: time_diff_us / 1e6,
         loadCurrent: load_in,
@@ -395,7 +416,7 @@ async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_ne
             dt: time_diff_us / 1e6,
             voltage: batt1_v,
             netCurrent: corrected_currents.battery1NetCorrected,
-        }, ekf_sample_count % SAMPLE_INTERVAL_BEFORE_WRITE === 0);
+        });
         main_state_vector = state_vector; main_state_cov = state.covariance;
 
         if (ekf_sample_count % SAMPLE_INTERVAL_BEFORE_WRITE === 0) {
@@ -413,7 +434,7 @@ async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_ne
             dt: time_diff_us / 1e6,
             voltage: batt2_v,
             netCurrent: corrected_currents.battery2NetCorrected,
-        }, ekf_sample_count % SAMPLE_INTERVAL_BEFORE_WRITE === 0);
+        });
 
         alt_state_vector = state_vector; alt_state_cov = state.covariance;
         if (ekf_sample_count % SAMPLE_INTERVAL_BEFORE_WRITE === 0) {

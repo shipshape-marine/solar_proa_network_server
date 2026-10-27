@@ -13,6 +13,7 @@ async function consolidated_data(path_array, file_path) {
     const promises = path_array.map(path => {
         return new Promise((resolve, reject) => {
             const file_data = [];
+            let skipped = 0;
             fs.createReadStream(`${file_path}/${path}`)
                 .pipe(csv())
                 .on('data', (row) => {
@@ -30,7 +31,7 @@ async function consolidated_data(path_array, file_path) {
                             a6: ch6,
                             a7: ch7
                         })
-                    } else {
+                    } else if (row.id != undefined) {
                         const { id, timestamp, run_id, time_diff, adcReading0, adcReading1, adcReading2, adcReading3, adcReading4, adcReading5, adcReading6, adcReading7 } = row;
                         file_data.push({
                             counter: id,
@@ -44,9 +45,14 @@ async function consolidated_data(path_array, file_path) {
                             a6: adcReading6,
                             a7: adcReading7
                         })
+                    } else {
+                        skipped++;
                     }
                 })
                 .on('end', () => {
+                    if (skipped > 0) {
+                        console.warn(`Skipped ${skipped} rows in ${path}: columns match neither expected format`);
+                    }
                     console.log(`Finished loading data from ${path}`);
                     resolve(file_data);
                 })
