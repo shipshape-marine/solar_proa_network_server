@@ -9,7 +9,8 @@
     "install:yarn": "npm install -g yarn",
     "start:seperate": "concurrently \"cd proa_advisor && npm start\" \"cd proa_advisor_react && npm run dev\"",
     "download:map": "cd proa_advisor && npm run download:map",
-    "rebuild": "cd proa_advisor && npm run rebuild && npm run download:map",
+    "extract:map": "cd proa_advisor && npm run extract:map",
+    "rebuild": "cd proa_advisor && npm run rebuild",
     "start:all": "cd proa_advisor && npm run start:all"
   },
   "dependencies": {
