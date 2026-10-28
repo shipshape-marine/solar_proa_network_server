@@ -318,6 +318,20 @@ async function getRCTableLength(tableName = "MainRCMapping") {
     });
 }
 
+async function clearRCTable(tableName = "MainRCMapping") {
+    const db = getDB();
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM ${tableName}`, (err) => {
+            if (err) {
+                console.error(`Error clearing ${tableName}:`, err.message);
+                reject(err);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
 async function insertBatteryState(
     battery_type = "LiNMC",
     tableName = "MainRCMapping",
@@ -341,6 +355,11 @@ async function insertBatteryState(
             `${tableName} already has ${tableLength} records. Skipping insertion.`,
         );
         return;
+    }
+
+    if (tableLength > 0 && override) {
+        await clearRCTable(tableName);
+        console.log(`Cleared ${tableLength} existing records from ${tableName} before override.`);
     }
 
     return new Promise((resolve, reject) => {
