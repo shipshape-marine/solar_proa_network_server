@@ -441,13 +441,17 @@
         "uuid": "8a457180-428a-419a-bd41-bb68223cdc26"
       }
     ],
-    "used_designators": "#PWR1-15,BT1-5,SC1-8,U1-4,M1-3,HE1-4,SW1-5,RV1,PWS1,D1-2,J1,R1-2",
+    "used_designators": "#PWR16-22,BT6-7,F1,SW6,R3-4,HE5,U3,U5",
     "variants": []
   },
   "sheets": [
     [
       "8a457180-428a-419a-bd41-bb68223cdc26",
       "Root"
+    ],
+    [
+      "2e514f33-ede1-4eee-878e-edde85940bc9",
+      "Discharge Circuit"
     ]
   ],
   "text_variables": {},
