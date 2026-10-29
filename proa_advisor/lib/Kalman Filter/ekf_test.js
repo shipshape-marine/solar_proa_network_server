@@ -6,7 +6,10 @@ const TEST_FILE_LOCATION = './model/battery_model/test_data';
 const { onNewSample } = require("../Kalman Filter/kalman_filter")
 
 function get_all_files_in_folder(folder_path) {
-    return fs.readdirSync(folder_path).filter(file => file.endsWith('.csv'));
+    // Numeric order, so part10 comes after part9
+    return fs.readdirSync(folder_path)
+        .filter(file => file.endsWith('.csv'))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
 async function consolidated_data(path_array, file_path) {
