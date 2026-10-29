@@ -11,7 +11,7 @@ dotenv.config();
 /*
 ADS8688 Pinouts:
 Pin     Setup 1     Setup 2 (not in use)   Description
-A0      MPPT_Out    Batt1_In                (Always positive but use bipolar ADC reading to detect miswiring and flip it)
+A0      MPPT_Out    Batt1_In                (Always positive; set MPPT_SENSOR_REVERSED=true if the sensor is wired backwards)
 A1      Load_In     Batt1_Out               (Always positive but use bipolar ADC reading to detect miswiring and flip it)
 A2      Batt1_Net   Batt2_In
 A3      Batt2_Net   Batt2_Out
@@ -32,6 +32,11 @@ const ENABLE_EKF_RESTORE            = process.env.ENABLE_EKF_RESTORE === 'true';
 const USE_NEW_RUN_ID                = process.env.USE_NEW_RUN_ID === 'true';
 const SAVE_STATES_TO_DB             = process.env.SAVE_STATES_TO_DB === 'true';
 const SAVE_ADC_READINGS_TO_DB       = process.env.SAVE_ADC_READINGS_TO_DB === 'true';
+// Current correction before the EKF (see kalman_filter_helper/kcl_corrector.js)
+const ENABLE_OFFSET_CORRECTION      = process.env.ENABLE_OFFSET_CORRECTION !== 'false';    // default on
+const ENABLE_KCL_CORRECTION         = process.env.ENABLE_KCL_CORRECTION === 'true';        // default off: harmful as a corrector
+// Fixed MPPT sign. Replaces the old auto-detect, where one glitch below -5 A negated every later reading until restart
+const MPPT_SENSOR_REVERSED          = process.env.MPPT_SENSOR_REVERSED === 'true';         // default off
 const SAMPLE_INTERVAL_MS            = 0;       // Only for test data
 let ekf_sample_count                = 0;
 let current_run_id                  = null;
@@ -39,10 +44,9 @@ let current_run_id                  = null;
 const MIDPOINT                      = 2 ** 15 - 1;      // Midpoint of 16-bit ADC
 const VOLTAGE_DIVIDER_RATIO         = (100 + 20) / 20;  // R1 + R2 / R2
 const BATT_CUTOFF_VOLTAGE           = 30;               // Voltage below which battery is considered disconnected or fully drained
+const INITIAL_COVARIANCE            = [1e-2, 1e-8, 1e-8];   // EKF P0: SoC (fraction^2), Vrc1, Vrc2 (V^2)
 
-const avg_kcl_noise             = [];
-const KCL_CURRENT_THRESHOLD     = 0.05;
-let data_array                  = [];       // For saving adc readings to db     
+let data_array                  = [];       // For saving adc readings to db
 
 // EKF Implements
 let main_battery_type           = null;
@@ -50,10 +54,9 @@ let alternate_battery_type      = null;
 let main_battery                = null;
 let alternate_battery           = null;
 let kcl_corrector               = null;
+let filter_started              = false;
 
 // Self correction
-const CURRENT_FLIP_THRESHOLD    = 5.0; // Threshold in Amps to detect if load or MPPT current is flipped due to wiring issues
-let is_mppt_flipped             = false;
 // Removed load flip detection in case of regenerative braking, as load current can be negative in that case
 
 // Statistic
@@ -89,9 +92,7 @@ async function onNewSample(sample, force_log = false, is_test = false) {
 
     try {
         if (current_run_id === null) {
-            const run = await getRunId(use_new = USE_NEW_RUN_ID);
-            const { run_id, is_new } = run;
-            console.log(`Current run_id: ${run_id}, is_new: ${is_new}`);
+            const { run_id, is_new } = await resolveRun();
             if (!is_new) {
                 if (!is_test && ENABLE_EKF_RESTORE) {
                     last_main_battery_state         = await getLastMainBatteryState(run_id);
@@ -114,7 +115,7 @@ async function onNewSample(sample, force_log = false, is_test = false) {
         let { counter, time_diff_us, a0, a1, a2, a3, a4, a5, a6, a7 } = sample;
 
         let load_in = adc_to_current(a1, 1);
-        let mppt_out = is_mppt_flipped ? -adc_to_current(a0, 1) : adc_to_current(a0, 1);
+        let mppt_out = MPPT_SENSOR_REVERSED ? -adc_to_current(a0, 1) : adc_to_current(a0, 1);
         let batt1_net = adc_to_current(a2, 1);
         let batt2_net = adc_to_current(a3, 1);
         let batt1_v = adc_to_voltage(a6, 5) * VOLTAGE_DIVIDER_RATIO;
@@ -178,7 +179,7 @@ async function onNewSample(sample, force_log = false, is_test = false) {
         // Initialising EKF instance for the batteries and KCL corrector
         if (!main_battery && batt1_v > BATT_CUTOFF_VOLTAGE) {
             try {
-                const { Q_total, sigma_v, sigma_i, sigma_kcl, interval_factor } = load_battery_constants(main_battery_type);
+                const { Q_total, sigma_v, sigma_i, interval_factor } = load_battery_constants(main_battery_type);
                 const loaded_noise = load_battery_noise(main_battery_type);
                 const rc_values = await getBatteryRC_OCV(batt1_v, interval_factor, "MainRCMapping");
                 if (rc_values.length < 1) {
@@ -186,19 +187,19 @@ async function onNewSample(sample, force_log = false, is_test = false) {
                 }
                 const { SoC, R0, R1, C1, C2, Tau1, Tau2, OCV } = rc_values[0];
 
-                avg_kcl_noise.push(sigma_kcl);
-                const noise = { 
+                const noise = {
                     voltage: sigma_v ** 2,
+                    voltageRate: loaded_noise?.voltageRate,
                     socProcess: loaded_noise ? loaded_noise.socProcess : 1e-22,
                     rcProcess: loaded_noise ? loaded_noise.rcProcess : 1e-22,
                 }
-            
+
                 const initial = {
                     soc: SoC,
                     vrc1: 0,
                     vrc2: 0,
                 }
-                let initialCovariance = diag([1e-8, 1e-8, 1e-8]);
+                let initialCovariance = diag(INITIAL_COVARIANCE);
 
                 if (last_main_battery_state) {
                     const last_state_vector = JSON.parse(last_main_battery_state.state_vector);
@@ -213,6 +214,8 @@ async function onNewSample(sample, force_log = false, is_test = false) {
                     name: "main",
                     capacityAh: Q_total,
                     noise: noise,
+                    voltageGate: loaded_noise?.voltageGate,
+                    gapDecay: loaded_noise?.gapDecay,
                     initial: initial,
                     initialCovariance: initialCovariance
                 });
@@ -226,7 +229,7 @@ async function onNewSample(sample, force_log = false, is_test = false) {
 
         if (!alternate_battery && batt2_v > BATT_CUTOFF_VOLTAGE) {
             try {
-                const { Q_total, sigma_v, sigma_i, sigma_kcl, interval_factor } = load_battery_constants(alternate_battery_type);
+                const { Q_total, sigma_v, sigma_i, interval_factor } = load_battery_constants(alternate_battery_type);
                 const loaded_noise = load_battery_noise(alternate_battery_type);
                 const rc_values = await getBatteryRC_OCV(batt2_v, interval_factor, "AlternateRCMapping");
                 if (rc_values.length < 1) {
@@ -234,19 +237,19 @@ async function onNewSample(sample, force_log = false, is_test = false) {
                 }
 
                 const { SoC, R0, R1, C1, C2, Tau1, Tau2, OCV } = rc_values[0];
-                avg_kcl_noise.push(sigma_kcl);
 
-                const noise = { 
+                const noise = {
                     socProcess: loaded_noise ? loaded_noise.socProcess : 1e-22,
                     rcProcess: loaded_noise ? loaded_noise.rcProcess : 1e-20,
                     voltage: sigma_v ** 2,
+                    voltageRate: loaded_noise?.voltageRate,
                 }
                 const initial = {
                     soc: SoC,
                     vrc1: 0,
                     vrc2: 0,
                 }
-                let initialCovariance = diag([1e-8, 1e-8, 1e-8]);
+                let initialCovariance = diag(INITIAL_COVARIANCE);
 
                 if (last_alternate_battery_state) {
                     const last_state_vector = JSON.parse(last_alternate_battery_state.state_vector);
@@ -262,6 +265,8 @@ async function onNewSample(sample, force_log = false, is_test = false) {
                     name: "alternate",
                     capacityAh: Q_total,
                     noise: noise,
+                    voltageGate: loaded_noise?.voltageGate,
+                    gapDecay: loaded_noise?.gapDecay,
                     initial: initial,
                     initialCovariance: initialCovariance
                 });
@@ -331,51 +336,55 @@ async function onNewSample(sample, force_log = false, is_test = false) {
 }
 
 async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_net, batt1_v, batt2_v, is_test = false) {
-    if (!kcl_corrector) {
-        kcl_corrector = new CurrentKCLCorrector({
-            noise: {
-                kcl: avg_kcl_noise.length > 0 ? avg_kcl_noise.reduce((a, b) => a + b, 0) / avg_kcl_noise.length : 1e-4,
-            },
-        }).init();
-        console.log(`Initialized KCL Corrector with noise: ${kcl_corrector.noise.kcl.toExponential(2)}A^2`);
+    if (!filter_started) {
+        filter_started = true;
+        if (ENABLE_OFFSET_CORRECTION || ENABLE_KCL_CORRECTION) {
+            kcl_corrector = new CurrentKCLCorrector({
+                offsets: ENABLE_OFFSET_CORRECTION,
+                kcl: ENABLE_KCL_CORRECTION,
+                cutoffVoltage: BATT_CUTOFF_VOLTAGE,
+            }).init();
+        }
+        console.log(`Current correction: offsets ${ENABLE_OFFSET_CORRECTION ? 'on' : 'off'}, KCL ${ENABLE_KCL_CORRECTION ? 'on' : 'off'}`);
+        if (ENABLE_KCL_CORRECTION) {
+            console.warn("KCL correction is harmful as a corrector (see final_report/kcl_correction_explained.md). Set ENABLE_KCL_CORRECTION=false.");
+        }
         console.log("====================================================");
         console.log("Started Kalman filter for power management");
         console.log("====================================================\n");
     }
 
-    // Tuning KCL process noise based on active channels
     let corrected_currents = {
         loadCorrected: load_in,
         chargeCorrected: mppt_out,
         battery1NetCorrected: batt1_net,
         battery2NetCorrected: batt2_net,
     };
-
-    const isActive = {};
-    isActive.load = load_in > KCL_CURRENT_THRESHOLD;
-    isActive.charge = mppt_out > KCL_CURRENT_THRESHOLD;
-    isActive.bat1 = Math.abs(batt1_net) > KCL_CURRENT_THRESHOLD;
-    isActive.bat2 = Math.abs(batt2_net) > KCL_CURRENT_THRESHOLD;
-    kcl_corrector.clampNoise(isActive);
-    
-    const { state, biases, currents, diagnostics } = kcl_corrector.update({
-        dt: time_diff_us / 1e6,
-        loadCurrent: load_in,
-        chargeCurrent: mppt_out,
-        battery1NetCurrent: batt1_net,
-        battery2NetCurrent: batt2_net,
-    });
-    
-    if (!state || !biases || !currents) {
-        throw new Error('KCL Corrector update failed to return valid state, biases, or currents.');
-    }
-    corrected_currents = currents;
-    
     let kcl_cov = null;
     let kcl_biases = null;
+
+    if (kcl_corrector) {
+        const { state, biases, currents } = kcl_corrector.update({
+            dt: time_diff_us / 1e6,
+            loadCurrent: load_in,
+            chargeCurrent: mppt_out,
+            battery1NetCurrent: batt1_net,
+            battery2NetCurrent: batt2_net,
+            battery1Voltage: batt1_v,
+            battery2Voltage: batt2_v,
+        });
+
+        if (!state || !biases || !currents) {
+            throw new Error('KCL Corrector update failed to return valid state, biases, or currents.');
+        }
+        corrected_currents = currents;
+        if (ekf_sample_count % SAMPLE_INTERVAL_BEFORE_WRITE === 0) {
+            kcl_cov = state.covariance;
+            kcl_biases = biases;
+        }
+    }
+
     if (ekf_sample_count % SAMPLE_INTERVAL_BEFORE_WRITE === 0) {
-        kcl_cov = state.covariance;
-        kcl_biases = biases;
         if (process.env.LOG_POWER_MANAGEMENT === 'true') {
             console.log("\nInput values - \tMain: " + batt1_v.toFixed(5) + "V, Alt: " + batt2_v.toFixed(5) + "V, \t\tLoad: " + load_in.toFixed(5) + "A, \tCharge: " + mppt_out.toFixed(5) + "A, \tBatt1: " + batt1_net.toFixed(5) + "A, \tBatt2: " + batt2_net.toFixed(5) + "A");
             console.log(`EKF Update: ${ekf_sample_count}, KCL Corrected Currents: \t\t\tLoad: ${corrected_currents.loadCorrected.toFixed(5)}A, \tCharge: ${corrected_currents.chargeCorrected.toFixed(5)}A, \tBatt1: ${corrected_currents.battery1NetCorrected.toFixed(5)}A, \tBatt2: ${corrected_currents.battery2NetCorrected.toFixed(5)}A`);
@@ -481,11 +490,6 @@ function detectAndCorrectFlips(mppt_out, load_in, batt1_net, batt2_net, batt1_v,
         batt2_net = 0;
     }
 
-    if (mppt_out < -CURRENT_FLIP_THRESHOLD) {
-        is_mppt_flipped = true;
-        mppt_out = -mppt_out;
-    }
-
     if (batt1_net + batt2_net - load_in + mppt_out > 2) {
         if ((-batt1_net) + batt2_net - load_in + mppt_out < 1) {
             batt1_net = -batt1_net; // Flip the sign of batt1_net to correct the KCL violation
@@ -498,11 +502,33 @@ function detectAndCorrectFlips(mppt_out, load_in, batt1_net, batt2_net, batt1_v,
     return [mppt_out, load_in, batt1_net, batt2_net, batt1_v, batt2_v];
 }
 
-async function getCurrentRunId() {
-    if (current_run_id === null) {
-        current_run_id = await getRunId(use_new = USE_NEW_RUN_ID).then(run => run.run_id);
+/**
+ * Resolve the run for this session once and share it.
+ *
+ * getCurrentRunId() must not set current_run_id itself: if /initial_power_data
+ * arrives before the first sample, onNewSample would then skip restoring the
+ * RunInfo totals, total_time would restart at 0 and the run's totals would be
+ * overwritten. Both callers share this promise instead, and only onNewSample
+ * sets current_run_id once the restore has run.
+ */
+let runPromise = null;
+function resolveRun() {
+    if (!runPromise) {
+        runPromise = getRunId(USE_NEW_RUN_ID)
+            .then((run) => {
+                console.log(`Current run_id: ${run.run_id}, is_new: ${run.is_new}`);
+                return run;
+            })
+            .catch((err) => {
+                runPromise = null; // allow a retry on the next call
+                throw err;
+            });
     }
-    return current_run_id;
+    return runPromise;
+}
+
+async function getCurrentRunId() {
+    return current_run_id ?? (await resolveRun()).run_id;
 }
 
 function getMedian(arr) {
