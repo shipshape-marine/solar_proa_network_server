@@ -171,7 +171,8 @@ app.get("/data_stream", (req, res) => {
 app.get("/initial_power_data", async (req, res) => {
     try {
         const runId = await getCurrentRunId();
-        const initialData = await populateInitalChartData(runId);
+        // 5000 = number of points to display in frontend
+        const initialData = await populateInitalChartData(runId, 5000);
         res.json(initialData.reverse());
     } catch (error) {
         console.error("Error fetching initial data:", error);

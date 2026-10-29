@@ -75,58 +75,45 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
             const initialCorrectedLoadCurrent: number[] = []; const initialCorrectedMPPTCurrent: number[] = []; const initialCorrectedNetMainCurrent: number[] = []; const initialCorrectedNetAltCurrent: number[] = [];
             const initialOCVMain: number[] = []; const initialOCVAlt: number[] = [];
             const initialXData: number[] = [];
+            // Push a value for every row (NaN = gap) so each series stays index-aligned
+            // with xData; skipping missing values would shift later points in time.
             initialData.forEach((dataPoint) => {
                 initialXData.push(dataPoint.total_time);
-                initialMainVoltage.push(dataPoint.V_batt_main);
-                initialMainSOC.push(dataPoint.SoC_batt_main);
-                initialLoadCurrent.push(dataPoint.I_load);
-                initialMPPTCurrent.push(dataPoint.I_mppt);
-                initialNetMainCurrent.push(dataPoint.I_batt_main);
-                initialNetAltCurrent.push(dataPoint.I_batt_alternate);
-                initialCorrectedMainVoltage.push(dataPoint.Corrected_V_batt_main);
-                initialCorrectedLoadCurrent.push(dataPoint.Corrected_I_load);
-                initialCorrectedMPPTCurrent.push(dataPoint.Corrected_I_mppt);
-                initialCorrectedNetMainCurrent.push(dataPoint.Corrected_I_batt_main);
-                initialCorrectedNetAltCurrent.push(dataPoint.Corrected_I_batt_alternate);
-                initialOCVMain.push(dataPoint.OCV_batt_main);
-                if (dataPoint.V_batt_alternate) {
-                    initialAltVoltage.push(dataPoint.V_batt_alternate);
-                }
-                if (dataPoint.SoC_batt_alternate) {
-                    initialAltSOC.push(dataPoint.SoC_batt_alternate);
-                }
-                if (dataPoint.Corrected_V_batt_alternate) {
-                    initialCorrectedAltVoltage.push(dataPoint.Corrected_V_batt_alternate);
-                }
-                if (dataPoint.OCV_batt_alternate) {
-                    initialOCVAlt.push(dataPoint.OCV_batt_alternate);
-                }
+                initialMainVoltage.push(dataPoint.V_batt_main ?? NaN);
+                initialMainSOC.push(dataPoint.SoC_batt_main ?? NaN);
+                initialLoadCurrent.push(dataPoint.I_load ?? NaN);
+                initialMPPTCurrent.push(dataPoint.I_mppt ?? NaN);
+                initialNetMainCurrent.push(dataPoint.I_batt_main ?? NaN);
+                initialNetAltCurrent.push(dataPoint.I_batt_alternate ?? NaN);
+                initialCorrectedMainVoltage.push(dataPoint.Corrected_V_batt_main ?? NaN);
+                initialCorrectedLoadCurrent.push(dataPoint.Corrected_I_load ?? NaN);
+                initialCorrectedMPPTCurrent.push(dataPoint.Corrected_I_mppt ?? NaN);
+                initialCorrectedNetMainCurrent.push(dataPoint.Corrected_I_batt_main ?? NaN);
+                initialCorrectedNetAltCurrent.push(dataPoint.Corrected_I_batt_alternate ?? NaN);
+                initialOCVMain.push(dataPoint.OCV_batt_main ?? NaN);
+                initialAltVoltage.push(dataPoint.V_batt_alternate ?? NaN);
+                initialAltSOC.push(dataPoint.SoC_batt_alternate ?? NaN);
+                initialCorrectedAltVoltage.push(dataPoint.Corrected_V_batt_alternate ?? NaN);
+                initialOCVAlt.push(dataPoint.OCV_batt_alternate ?? NaN);
             });
-            setXData(initialXData.slice(0, defaultLength));
-            setVoltageReadingMain(initialMainVoltage.slice(0, defaultLength));
-            setSocMain(initialMainSOC.slice(0, defaultLength));
-            setCurrentLoad(initialLoadCurrent.slice(0, defaultLength));
-            setCurrentMPPT(initialMPPTCurrent.slice(0, defaultLength));
-            setCurrentNetMain(initialNetMainCurrent.slice(0, defaultLength));
-            setCorrectedVoltageMain(initialCorrectedMainVoltage.slice(0, defaultLength));
-            setCorrectedVoltageAlt(initialCorrectedAltVoltage.slice(0, defaultLength));
-            setCorrectedCurrentLoad(initialCorrectedLoadCurrent.slice(0, defaultLength));
-            setCorrectedCurrentMPPT(initialCorrectedMPPTCurrent.slice(0, defaultLength));
-            setCorrectedCurrentNetMain(initialCorrectedNetMainCurrent.slice(0, defaultLength));
-            setOCVMain(initialOCVMain.slice(0, defaultLength));
-            setOCVAlt(initialOCVAlt.slice(0, defaultLength));
-            if (initialAltVoltage.length > 0) {
-                setVoltageReadingAlt(initialAltVoltage.slice(0, defaultLength));
-            }
-            if (initialAltSOC.length > 0) {
-                setSocAlt(initialAltSOC.slice(0, defaultLength));
-            }
-            if (initialNetAltCurrent.length > 0) {
-                setCurrentNetAlt(initialNetAltCurrent.slice(0, defaultLength));
-            }
-            if (initialCorrectedNetAltCurrent.length > 0) {
-                setCorrectedCurrentNetAlt(initialCorrectedNetAltCurrent.slice(0, defaultLength));
-            }
+            // Keep the newest points, matching how live data trims with slice(-n)
+            setXData(initialXData.slice(-defaultLength));
+            setVoltageReadingMain(initialMainVoltage.slice(-defaultLength));
+            setSocMain(initialMainSOC.slice(-defaultLength));
+            setCurrentLoad(initialLoadCurrent.slice(-defaultLength));
+            setCurrentMPPT(initialMPPTCurrent.slice(-defaultLength));
+            setCurrentNetMain(initialNetMainCurrent.slice(-defaultLength));
+            setCorrectedVoltageMain(initialCorrectedMainVoltage.slice(-defaultLength));
+            setCorrectedVoltageAlt(initialCorrectedAltVoltage.slice(-defaultLength));
+            setCorrectedCurrentLoad(initialCorrectedLoadCurrent.slice(-defaultLength));
+            setCorrectedCurrentMPPT(initialCorrectedMPPTCurrent.slice(-defaultLength));
+            setCorrectedCurrentNetMain(initialCorrectedNetMainCurrent.slice(-defaultLength));
+            setOCVMain(initialOCVMain.slice(-defaultLength));
+            setOCVAlt(initialOCVAlt.slice(-defaultLength));
+            setVoltageReadingAlt(initialAltVoltage.slice(-defaultLength));
+            setSocAlt(initialAltSOC.slice(-defaultLength));
+            setCurrentNetAlt(initialNetAltCurrent.slice(-defaultLength));
+            setCorrectedCurrentNetAlt(initialCorrectedNetAltCurrent.slice(-defaultLength));
         }
     }
 
@@ -138,24 +125,29 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
 
     function populateData(data: PowerData) {
         const slice_length = parseInt(lengthSliderRef.current?.value || displayDataLength.toString());
+        // Always append (NaN = gap) so every series stays index-aligned with xData
+        const append = (value: number | null | undefined) => (prev: number[]) => [...prev, value ?? NaN].slice(-slice_length);
         setXData((prevXData) => [...prevXData, data.total_time].slice(-slice_length));
-        data.V_batt_main != undefined && setVoltageReadingMain((prev) => [...prev, data.V_batt_main as number].slice(-slice_length));
-        data.Corrected_V_batt_main != undefined && setCorrectedVoltageMain((prev) => [...prev, data.Corrected_V_batt_main as number].slice(-slice_length));
-        data.OCV_batt_main != undefined && setOCVMain((prev) => [...prev, data.OCV_batt_main as number].slice(-slice_length));
-        data.SoC_batt_main != undefined && setSocMain((prev) => [...prev, data.SoC_batt_main as number].slice(-slice_length));
-        data.V_batt_alternate != undefined && setVoltageReadingAlt((prev) => [...prev, data.V_batt_alternate as number].slice(-slice_length));
-        data.Corrected_V_batt_alternate != undefined && setCorrectedVoltageAlt((prev) => [...prev, data.Corrected_V_batt_alternate as number].slice(-slice_length));
-        data.OCV_batt_alternate != undefined && setOCVAlt((prev) => [...prev, data.OCV_batt_alternate as number].slice(-slice_length));
-        data.SoC_batt_alternate != undefined && setSocAlt((prev) => [...prev, data.SoC_batt_alternate as number].slice(-slice_length));
-        data.I_load != undefined && setCurrentLoad((prev) => [...prev, data.I_load as number].slice(-slice_length));
-        data.I_mppt != undefined && setCurrentMPPT((prev) => [...prev, data.I_mppt as number].slice(-slice_length));
-        data.I_batt_main != undefined && setCurrentNetMain((prev) => [...prev, data.I_batt_main as number].slice(-slice_length));
-        data.I_batt_alternate != undefined && setCurrentNetAlt((prev) => [...prev, data.I_batt_alternate as number].slice(-slice_length));
-        data.Corrected_I_load != undefined && setCorrectedCurrentLoad((prev) => [...prev, data.Corrected_I_load as number].slice(-slice_length));
-        data.Corrected_I_mppt != undefined && setCorrectedCurrentMPPT((prev) => [...prev, data.Corrected_I_mppt as number].slice(-slice_length));
-        data.Corrected_I_batt_main != undefined && setCorrectedCurrentNetMain((prev) => [...prev, data.Corrected_I_batt_main as number].slice(-slice_length));
-        data.Corrected_I_batt_alternate != undefined && setCorrectedCurrentNetAlt((prev) => [...prev, data.Corrected_I_batt_alternate as number].slice(-slice_length));
+        setVoltageReadingMain(append(data.V_batt_main));
+        setCorrectedVoltageMain(append(data.Corrected_V_batt_main));
+        setOCVMain(append(data.OCV_batt_main));
+        setSocMain(append(data.SoC_batt_main));
+        setVoltageReadingAlt(append(data.V_batt_alternate));
+        setCorrectedVoltageAlt(append(data.Corrected_V_batt_alternate));
+        setOCVAlt(append(data.OCV_batt_alternate));
+        setSocAlt(append(data.SoC_batt_alternate));
+        setCurrentLoad(append(data.I_load));
+        setCurrentMPPT(append(data.I_mppt));
+        setCurrentNetMain(append(data.I_batt_main));
+        setCurrentNetAlt(append(data.I_batt_alternate));
+        setCorrectedCurrentLoad(append(data.Corrected_I_load));
+        setCorrectedCurrentMPPT(append(data.Corrected_I_mppt));
+        setCorrectedCurrentNetMain(append(data.Corrected_I_batt_main));
+        setCorrectedCurrentNetAlt(append(data.Corrected_I_batt_alternate));
     };
+
+    // Alt series are now NaN-padded, so show the alt charts only once a real reading exists
+    const hasAltBattery = voltageReadingAlt.some(Number.isFinite);
 
     useEffect(() => {
         if (lengthSliderRef.current) {
@@ -196,7 +188,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
                     />
                 </Grid>
 
-                {voltageReadingAlt.length != 0 && voltageReadingAlt[0] !== undefined && (
+                {hasAltBattery && (
                     <Grid size={{ xs: 12, lg: 6 }}>
                         <DynamicLineChart
                             title="Alt Battery Voltage"
@@ -234,7 +226,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
                     />
                 </Grid>
 
-                {voltageReadingAlt.length != 0 && voltageReadingAlt[0] !== undefined && (
+                {hasAltBattery && (
                     <Grid size={{ xs: 12, lg: 6 }}>
                         <DynamicLineChart
                             title="Alt Battery SOC"
@@ -306,7 +298,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
                     />
                 </Grid>
 
-                {voltageReadingAlt.length != 0 && voltageReadingAlt[0] !== undefined && (
+                {hasAltBattery && (
                     <Grid size={{ xs: 12, lg: 6 }}>
                         <DynamicLineChart
                             title="Current Net Alt"
