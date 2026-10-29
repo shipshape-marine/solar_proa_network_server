@@ -1,8 +1,41 @@
 'use strict';
 
-const { KalmanFilter } = require('kalman-filter');
-const { getBatteryRC_SoC } = require('../../../model/power_management_db');
+const { KalmanFilter, State } = require('kalman-filter');
+const { getBatteryRC_SoC, getBatteryRCTable } = require('../../../model/power_management_db');
 const { diag } = require('./helper');
+
+const MAX_STEP_S = 60;      // s, a longer step is a logging gap: no current is integrated over it
+
+// OCV -> SoC lookup: the first row of each new running maximum of OCV, so the curve is strictly increasing
+function buildInverseOcv(table) {
+    const rows = [...table].sort((a, b) => a.SoC - b.SoC);
+    const ocv = [], soc = [];
+    for (const row of rows) {
+        if (ocv.length === 0 || row.OCV > ocv[ocv.length - 1]) {
+            ocv.push(row.OCV);
+            soc.push(row.SoC);
+        }
+    }
+    return { rows, ocv, soc };
+}
+
+// Linear interpolation, held at the ends
+function interpolate(x, xs, ys) {
+    const n = xs.length - 1;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n]) return ys[n];
+    let lo = 0, hi = n;
+    while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (xs[mid] <= x) lo = mid; else hi = mid;
+    }
+    const slope = (ys[hi] - ys[lo]) / (xs[hi] - xs[lo]);
+    return slope * (x - xs[lo]) + ys[lo];
+}
+
+function ocvSlope(low, high) {
+    return (high.OCV - low.OCV) / (high.SoC - low.SoC);
+}
 
 function clamp(x, lo, hi) {
     return Math.max(lo, Math.min(hi, x));
@@ -30,7 +63,15 @@ class Battery2RCEKF {
             socProcess: options.noise?.socProcess ?? 1e-22,
             rcProcess: options.noise?.rcProcess ?? 1e-22,
             voltage: options.noise?.voltage ?? 1e-14,
+            voltageRate: options.noise?.voltageRate ?? null,   // V^2*s; when set, R = voltageRate / dt instead of voltage
         };
+
+        // Voltage-update gate for flat OCV curves (LiFePO4): update only where |dOCV/dSoC| >= minSlope at the estimate,
+        // or after restTime seconds below restCurrent where the voltage itself maps to a part of the curve that steep
+        this.voltageGate = options.voltageGate ?? null;
+        this.restSeconds = 0;
+        // Over a logging gap the RC voltages relax with no current (gapDecay) or reset to 0
+        this.gapDecay = options.gapDecay ?? false;
 
         this.initial = {
             soc: options.initial.soc,
@@ -51,7 +92,11 @@ class Battery2RCEKF {
     }
 
     async init() {
-        this.rc_values = await getBatteryRC_SoC(this.initial.soc, this.name === "main" ? "MainRCMapping" : "AlternateRCMapping", 2);
+        const tableName = this.name === "main" ? "MainRCMapping" : "AlternateRCMapping";
+        this.rc_values = await getBatteryRC_SoC(this.initial.soc, tableName, 2);
+        if (this.voltageGate) {
+            this.inverseOcv = buildInverseOcv(await getBatteryRCTable(tableName));
+        }
         this.kf = new KalmanFilter({
             dynamic: {
                 dimension: 3,
@@ -94,7 +139,10 @@ class Battery2RCEKF {
                     return this._measurementJacobian(predicted.mean);
                 },
 
-                covariance: () => [[this.noise.voltage]],
+                covariance: () => {
+                    const dt = this.ctx?.dt ?? 1;
+                    return [[this.noise.voltageRate ? this.noise.voltageRate / dt : this.noise.voltage]];
+                },
             },
         });
 
@@ -121,7 +169,13 @@ class Battery2RCEKF {
             throw new Error(`${this.name}: netCurrent must be finite.`);
         }
 
+        if (dt > MAX_STEP_S) {
+            this.skipGap(dt);
+            return this._result(this.previousCorrected, voltage, netCurrent);
+        }
+
         this.ctx = { dt, voltage, netCurrent };
+        const useVoltage = this._voltageUpdateAllowed(voltage, netCurrent, dt);
 
         const predicted = this.kf.predict({
             previousCorrected: this.previousCorrected || undefined,
@@ -129,10 +183,10 @@ class Battery2RCEKF {
 
         clampSocState(predicted);
 
-        const corrected = this.kf.correct({
+        const corrected = useVoltage ? this.kf.correct({
             predicted,
             observation: [voltage],
-        });
+        }) : predicted;
 
         clampSocState(corrected);
 
@@ -141,16 +195,55 @@ class Battery2RCEKF {
         }
 
         this.previousCorrected = corrected;
+        this.rc_values = await getBatteryRC_SoC(corrected.mean[0][0], this.name === "main" ? "MainRCMapping" : "AlternateRCMapping", 2);
 
+        if (log) {
+            console.log(`After predict`, predicted.mean, `After correct`, corrected.mean);
+        }
+        return this._result(corrected, voltage, netCurrent, log);
+    }
+
+    // Unrecorded time: no charge is counted and there is no voltage update; the RC voltages relax or reset
+    skipGap(seconds) {
+        const state = this.previousCorrected || new State({
+            mean: [[this.initial.soc], [this.initial.vrc1], [this.initial.vrc2]],
+            covariance: this.initialCovariance,
+        });
+        const rc = this.rc_values[0];
+        const keep1 = this.gapDecay ? Math.exp(-seconds / (rc.R1 * rc.C1)) : 0;
+        const keep2 = this.gapDecay ? Math.exp(-seconds / (rc.R2 * rc.C2)) : 0;
+        this.previousCorrected = new State({
+            mean: [[state.mean[0][0]], [state.mean[1][0] * keep1], [state.mean[2][0] * keep2]],
+            covariance: state.covariance,
+        });
+    }
+
+    _voltageUpdateAllowed(voltage, current, dt) {
+        const gate = this.voltageGate;
+        if (!gate) {
+            return true;
+        }
+        this.restSeconds = Math.abs(current) < gate.restCurrent ? this.restSeconds + dt : 0;
+        const [low, high] = this.rc_values;
+        if (Math.abs(ocvSlope(low, high)) >= gate.minSlope) {
+            return true;
+        }
+        if (this.restSeconds < gate.restTime) {
+            return false;
+        }
+        const { rows, ocv, soc } = this.inverseOcv;
+        const k = clamp(Math.floor(interpolate(voltage + low.R0 * current, ocv, soc) * 1e5 + 0.5), 0, rows.length - 2);
+        return Math.abs(ocvSlope(rows[k], rows[k + 1])) >= gate.minSlope;
+    }
+
+    _result(corrected, voltage, netCurrent, log = false) {
         const soc = corrected.mean[0][0];
         const vrc1 = corrected.mean[1][0];
         const vrc2 = corrected.mean[2][0];
-        this.rc_values = await getBatteryRC_SoC(soc, this.name === "main" ? "MainRCMapping" : "AlternateRCMapping", 2);
 
         const rc = this.rc_values[0];
         if (log) {
-            console.log(`After predict`, predicted.mean, `After correct`, corrected.mean);
-            console.log(rc.OCV, vrc1, vrc2, rc.R0 * netCurrent, predicted.mean, corrected.mean);
+            console.log(rc.OCV, vrc1, vrc2, rc.R0 * netCurrent);
         }
         const voltageEstimate =
             rc.OCV
