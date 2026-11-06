@@ -3852,6 +3852,18 @@
 		(uuid "8ef5a323-32ea-4ae2-9b41-1c98670e6614")
 	)
 	(rectangle
+		(start 198.12 137.16)
+		(end 281.94 165.1)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "922574ae-d327-4d8d-b103-4bcdb36147ac")
+	)
+	(rectangle
 		(start 101.6 48.26)
 		(end 163.83 82.55)
 		(stroke
@@ -3980,6 +3992,16 @@
 			)
 		)
 		(uuid "7cd994d0-cd88-4cc3-b0b5-5792dfaea611")
+	)
+	(text "Partial Circuit"
+		(exclude_from_sim no)
+		(at 207.01 140.462 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "dbafa3dd-551d-4e0e-9892-255929591f58")
 	)
 	(text "Alternate Battery Array"
 		(exclude_from_sim no)
@@ -10609,7 +10631,7 @@
 		)
 	)
 	(sheet
-		(at 261.62 146.05)
+		(at 255.27 146.05)
 		(size 20.32 16.51)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10625,7 +10647,7 @@
 		)
 		(uuid "2e514f33-ede1-4eee-878e-edde85940bc9")
 		(property "Sheetname" "Discharge Circuit"
-			(at 261.62 145.3384 0)
+			(at 255.27 145.3384 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10636,7 +10658,7 @@
 			)
 		)
 		(property "Sheetfile" "discharge.kicad_sch"
-			(at 261.62 163.1446 0)
+			(at 255.27 163.1446 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10655,7 +10677,7 @@
 		)
 	)
 	(sheet
-		(at 236.22 146.05)
+		(at 215.9 146.05)
 		(size 21.59 16.51)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10671,7 +10693,7 @@
 		)
 		(uuid "4ab75bc3-422e-47d5-82ec-9963dc2cb9fd")
 		(property "Sheetname" "final_setup_no_sensor"
-			(at 236.22 145.3384 0)
+			(at 215.9 145.3384 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10682,7 +10704,7 @@
 			)
 		)
 		(property "Sheetfile" "final_setup_no_sensor.kicad_sch"
-			(at 236.22 163.1446 0)
+			(at 215.9 163.1446 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
