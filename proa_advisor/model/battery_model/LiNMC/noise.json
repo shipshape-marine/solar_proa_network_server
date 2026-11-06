@@ -1,4 +1,6 @@
-{ 
-    "socProcess": 1e-22,
-    "rcProcess": 1e-22
+{
+    "socProcess": 1e-12,
+    "rcProcess": 1e-7,
+    "voltageRate": 1e-4,
+    "gapDecay": false
 }

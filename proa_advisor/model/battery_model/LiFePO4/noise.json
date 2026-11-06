@@ -1,4 +1,7 @@
-{ 
-    "socProcess": 1e-22,
-    "rcProcess": 1e-20
+{
+    "socProcess": 1e-9,
+    "rcProcess": 1e-7,
+    "voltageRate": 1e-4,
+    "gapDecay": true,
+    "voltageGate": { "minSlope": 5.0, "restCurrent": 1.0, "restTime": 300 }
 }
