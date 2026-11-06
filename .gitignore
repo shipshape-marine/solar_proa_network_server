@@ -10,3 +10,4 @@ proa_advisor/map-tiles/
 
 graphify-out/
 .graphifyignore
+.history
