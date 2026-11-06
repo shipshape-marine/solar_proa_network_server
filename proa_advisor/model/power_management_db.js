@@ -235,6 +235,13 @@ async function getBatteryRC_SoC(soc, tableName, count = 1) {
     return filtered;
 }
 
+async function getBatteryRCTable(tableName) {
+    if (tableName !== "MainRCMapping" && tableName !== "AlternateRCMapping") {
+        throw new Error("Invalid table name. Must be 'MainRCMapping' or 'AlternateRCMapping'.");
+    }
+    return fetchAndCacheRC(tableName);
+}
+
 async function getBatteryRC_OCV(voltage, factor, tableName, count = 1) {
     if (tableName !== "MainRCMapping" && tableName !== "AlternateRCMapping") {
         throw new Error("Invalid table name. Must be 'MainRCMapping' or 'AlternateRCMapping'.");
@@ -373,7 +380,7 @@ async function populateInitalChartData(run_id = null, size = 100) {
     }
     return new Promise((resolve, reject) => {
         db.all(`
-            SELECT * FROM SensorReadings WHERE run_id = ? ORDER BY total_time DESC LIMIT ?
+            SELECT * FROM SensorReadings WHERE run_id = ? ORDER BY id DESC LIMIT ?
         `, [run_id, size], (err, rows) => {
             if (err) {
                 console.error('Error retrieving initial chart data:', err.message);
@@ -393,6 +400,7 @@ module.exports = {
     insertSensorReadings,
     insertKCLCorrectionState,
     getBatteryRC_SoC,
+    getBatteryRCTable,
     getBatteryRC_OCV,
     getLastMainBatteryState,
     getLastAlternateBatteryState,
