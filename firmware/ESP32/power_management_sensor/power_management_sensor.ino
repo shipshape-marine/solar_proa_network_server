@@ -15,6 +15,16 @@
 #define ADS8688_SPI_CLOCK 20000000
 #define SAMPLING_RATE 1200
 //#define SAMPLING_RATE 10
+
+/*
+-------------------
+BENCHMARKING TEST
+-------------------
+// ESP32 C3 only single core, cannot read from adc while writing
+// Max recorded transfer speed 630KB/s (163kSPS or 163kHz)
+// Pkt size = 5, Flushing into CSV at 1000 count, reading at 5-50 packets (8 samples per packet)
+// Max benchmark without serial write 5000 rows * 8 ch = 155ms (258kSPS or 258kHz)
+*/
 #define PACKET_SIZE 6
 
 ADS8688 adc(PIN_CS, PIN_SCK, PIN_MOSI, PIN_MISO);
