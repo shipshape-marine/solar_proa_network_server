@@ -30,8 +30,8 @@ FOLDERS = {
     'LiFePO4 controlled': 'LiFePO4 Controlled Discharge',
     'General Discharge Test': 'General Discharge Test',
     'General Discharge Test 2': 'General Discharge Test 2',
-    'LiFePO4 Battery Discharge Test': 'LiFePO4 General Test',
-    'LiNMC Battery Discharge Test': 'LiNMC General Test',
+    'LiFePO4 General Test': 'LiFePO4 General Test',
+    'LiNMC General Test': 'LiNMC General Test',
 }
 FIG_DIR = REPO_ROOT / 'final_report' / 'figures'
 TABLE_DIR = REPO_ROOT / 'final_report' / 'tables'
@@ -160,6 +160,31 @@ def window_median(raw, n=10):
     win = win.reset_index(level=0).reset_index(drop=True)
     win['t'] = win.dt.cumsum()
     return win
+
+
+def window_mean(raw, n=10):
+    """The charge-preserving 10-sample stream that kalman_filter.js feeds the filters since 2026-11-08 (windowInputs):
+    currents as sum(I*dt)/sum(dt) (a battery's current is already 0 below the cutoff), voltages as the mean of the
+    samples above V_CUTOFF (0 V when none is). A window with sum(dt) = 0 takes the plain mean of the currents."""
+    block = raw.groupby('session').cumcount() // n
+    keys = [raw.session.to_numpy(), block.to_numpy()]
+    cur, volt = ['I_mppt', 'I_load', 'I_b1', 'I_b2', 'I_bat'], ['V_b1', 'V_b2', 'V_bat']
+    x = raw[cur].mul(raw.dt, axis=0).assign(dt=raw.dt)
+    groups = x.groupby(keys, sort=True)
+    q, dt = groups[cur].sum(), groups.dt.sum()
+    plain = raw[cur].groupby(keys, sort=True).mean()
+    win = q.div(dt.where(dt > 0), axis=0).fillna(plain)
+    win[volt] = raw[volt].where(raw[volt] > V_CUTOFF).groupby(keys, sort=True).mean().fillna(0.0)
+    g = raw.groupby(keys, sort=True)
+    win['file'] = g.file.first()
+    win['dt'] = dt
+    win['gap_s'] = g.gap_s.sum()
+    win = win.reset_index(level=0, names='session').reset_index(drop=True)
+    win['t'] = win.dt.cumsum()
+    return win
+
+
+WINDOWS = {'median': window_median, 'mean': window_mean}
 
 
 # --------------------------------------------------------------------------- battery model
@@ -612,7 +637,7 @@ def suptitle(fig, text):
 
 # --------------------------------------------------------------------------- operational audit
 OPERATIONAL_FOLDERS = tuple(FOLDERS[r] for r in ('General Discharge Test', 'General Discharge Test 2',
-                                                 'LiNMC Battery Discharge Test', 'LiFePO4 Battery Discharge Test'))
+                                                 'LiNMC General Test', 'LiFePO4 General Test'))
 # Controlled and older recordings an operational folder must not duplicate. The two old conversions wait in
 # TO_DELETE; once they are deleted the audit skips them.
 REFERENCE_FOLDERS = tuple(p for p in (TEST_DATA / FOLDERS['LiNMC controlled'], TEST_DATA / FOLDERS['LiFePO4 controlled'],
@@ -1265,11 +1290,11 @@ OPERATIONAL_RUNS = {
              'The separate 1.4-min recording at 16:37 (79 s gap, 0.2 A trickle charge) is left out.'),
     'General Discharge Test 2': dict(
         battery='LiNMC', slot='main', mppt_latch=False, files=None, note='12 Jun, charging near full.'),
-    'LiNMC Battery Discharge Test': dict(
+    'LiNMC General Test': dict(
         battery='LiNMC', slot='main', mppt_latch=False, files=None, latch_evidence=True,
         note='29 Jun. MPPT flip latch disabled (one -10.24 A spike at 0.93 h would negate every later MPPT reading). '
              '10.4 min of logger stalls, mostly at rest; 0.24 Ah passed unrecorded (at most 0.34 pp).'),
-    'LiFePO4 Battery Discharge Test': dict(
+    'LiFePO4 General Test': dict(
         battery='LiFePO4', slot='alternate', mppt_latch=False, files=None,
         note='22 Jun. LiFePO4 in the alternate slot; the LiNMC in the main slot is idle and not evaluated. '
              'The server restarted during the test (run ids 1-8); the replay runs straight through.'),
@@ -1278,11 +1303,12 @@ PAIRS = {'OCV − CC': ('soc_ocv', 'soc_cc'), 'EKF − CC': ('soc_ekf', 'soc_cc'
          'EKF + KCL − CC': ('soc_ekf_kcl', 'soc_cc'), 'EKF + KCL − EKF': ('soc_ekf_kcl', 'soc_ekf')}
 
 
-def load_operational(run, mppt_latch=None):
-    """Median stream of an operational run with its confirmed corrections (mppt_latch overrides the run's setting)."""
+def load_operational(run, mppt_latch=None, window='median'):
+    """Median stream of an operational run with its confirmed corrections (mppt_latch overrides the run's setting).
+    window='mean' gives the server's charge-preserving stream instead (window_mean)."""
     r = OPERATIONAL_RUNS[run]
     latch = r['mppt_latch'] if mppt_latch is None else mppt_latch
-    return window_median(load_run(TEST_DATA / FOLDERS[run], r['slot'], r['files'], verbose=False, mppt_latch=latch))
+    return WINDOWS[window](load_run(TEST_DATA / FOLDERS[run], r['slot'], r['files'], verbose=False, mppt_latch=latch))
 
 
 def record_state(win, est, smooth_s=10.0):
@@ -1466,11 +1492,11 @@ RUNS = {
                                    date='12 Jun 2026', adc='ADS8688', short='GDT 1 (LiNMC, 12 Jun)', label='GDT 1 (LiNMC)'),
     'General Discharge Test 2': dict(kind='operational', battery='LiNMC', slot='main', folder=FOLDERS['General Discharge Test 2'],
                                      date='12 Jun 2026', adc='ADS8688', short='GDT 2 (LiNMC, 12 Jun)', label='GDT 2 (LiNMC)'),
-    'LiFePO4 Battery Discharge Test': dict(kind='operational', battery='LiFePO4', slot='alternate',
-                                           folder=FOLDERS['LiFePO4 Battery Discharge Test'], date='22 Jun 2026', adc='ADS8688',
+    'LiFePO4 General Test': dict(kind='operational', battery='LiFePO4', slot='alternate',
+                                           folder=FOLDERS['LiFePO4 General Test'], date='22 Jun 2026', adc='ADS8688',
                                            short='LiFePO4 (22 Jun)', label='LiFePO4 discharge test'),
-    'LiNMC Battery Discharge Test': dict(kind='operational', battery='LiNMC', slot='main',
-                                         folder=FOLDERS['LiNMC Battery Discharge Test'], date='29 Jun 2026', adc='ADS8688',
+    'LiNMC General Test': dict(kind='operational', battery='LiNMC', slot='main',
+                                         folder=FOLDERS['LiNMC General Test'], date='29 Jun 2026', adc='ADS8688',
                                          short='LiNMC (29 Jun)', label='LiNMC discharge test'),
 }
 RATED_AH = {'LiNMC': 100.0, 'LiFePO4': 50.0}           # Measurement Equipment section of the report
@@ -1498,12 +1524,12 @@ def adc_signature(folder, nrows=50000):
             'ADC from signature': 'ADS1115' if step > 10 and len(frozen) >= 3 else 'ADS8688'}
 
 
-def load_any(run):
-    """Median stream of any run in RUNS, with the confirmed corrections of the operational runs."""
+def load_any(run, window='median'):
+    """Median stream (or window='mean') of any run in RUNS, with the confirmed corrections of the operational runs."""
     r = RUNS[run]
     if r['kind'] == 'operational':
-        return load_operational(run)
-    return window_median(load_run(TEST_DATA / r['folder'], r['slot'], verbose=False))
+        return load_operational(run, window=window)
+    return WINDOWS[window](load_run(TEST_DATA / r['folder'], r['slot'], verbose=False))
 
 
 def _stamp(name):
@@ -2238,7 +2264,7 @@ RATE_TOL_PP = 0.05           # SoC change tolerated from the sampling rate alone
 EVENT_PP = 0.05              # a reference step changing SoC more than this is a discrete filter event (gate opening)
 EVENT_WINDOW_S = 10.0        # s (or two filter steps if longer) around such an event, left out of the max |ΔSoC|
 SWEEP_RUNS = ('LiNMC controlled', 'LiFePO4 controlled', 'General Discharge Test', 'General Discharge Test 2',
-              'LiFePO4 Battery Discharge Test', 'LiNMC Battery Discharge Test')
+              'LiFePO4 General Test', 'LiNMC General Test')
 DECIMATION_STYLE = {'mean': dict(color=INK, ls='-', marker='o'), 'median': dict(color=INK2, ls=(0, (4, 2)), marker='s'),
                     'point': dict(color=MUTED, ls=(0, (1, 1.5)), marker='^')}
 

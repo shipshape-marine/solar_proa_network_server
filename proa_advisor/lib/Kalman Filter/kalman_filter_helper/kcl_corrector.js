@@ -171,4 +171,44 @@ class CurrentKCLCorrector {
     }
 }
 
-module.exports = { CurrentKCLCorrector };
+/**
+ * KCL residual as a fault detector (never fed back into the currents).
+ *
+ * Takes the raw balance load - mppt - bat1 - bat2 of every filter step (disconnected batteries already 0 A) and,
+ * per minute of recorded time, its median. A minute whose |median| is above thresholdA is a fault minute; the flag
+ * is on from that minute until the next minute at or below the threshold.
+ * Evidence (final_report/kcl_correction_explained.md, Section 5): during the 26-min MPPT sign error of 29 Jun the
+ * per-minute median was 3.8 A on average and never below 1.4 A; outside it, it never went above 1.7 A on any run.
+ * The 2 A default is provisional; more data is needed to set it.
+ */
+class KCLFaultMonitor {
+    constructor(options = {}) {
+        this.thresholdA = options.thresholdA ?? 2.0;
+        this.periodS = options.periodS ?? 60;
+        this.elapsed = 0;
+        this.residuals = [];
+        this.fault = false;
+        this.lastMedianA = null;
+    }
+
+    // Returns { fault, changed, medianA }; medianA and changed are set only when a minute completes
+    update(dt, { loadCurrent, chargeCurrent, battery1NetCurrent, battery2NetCurrent }) {
+        this.residuals.push(loadCurrent - chargeCurrent - battery1NetCurrent - battery2NetCurrent);
+        this.elapsed += dt;
+        if (this.elapsed < this.periodS) {
+            return { fault: this.fault, changed: false, medianA: null };
+        }
+        const sorted = this.residuals.sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const medianA = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        this.residuals = [];
+        this.elapsed = 0;
+        this.lastMedianA = medianA;
+        const fault = Math.abs(medianA) > this.thresholdA;
+        const changed = fault !== this.fault;
+        this.fault = fault;
+        return { fault, changed, medianA };
+    }
+}
+
+module.exports = { CurrentKCLCorrector, KCLFaultMonitor };

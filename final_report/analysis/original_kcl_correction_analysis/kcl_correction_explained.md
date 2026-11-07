@@ -24,10 +24,10 @@ Runs used:
 
 | Run | What it is | Why it matters here |
 |---|---|---|
-| LiNMC controlled discharge (`LiNMC Remapped`, Mar–Apr 2026) | Stepped discharge with rests | Battery and load sensors measure the same current; MPPT idle |
-| LiFePO4 capacity test (`LiFePO4 Remapped`, 25 May 2026) | Clean full discharge | Clean data: a good corrector should change little |
+| LiNMC controlled discharge (`LiNMC Controlled Discharge`, Mar–Apr 2026) | Stepped discharge with rests | Battery and load sensors measure the same current; MPPT idle |
+| LiFePO4 capacity test (`LiFePO4 Controlled Discharge`, 25 May 2026) | Clean full discharge | Clean data: a good corrector should change little |
 | General Discharge Tests 1 and 2 | Operational, LiNMC | Short runs with MPPT charging |
-| LiNMC Battery Discharge Test (29 Jun) | Operational, LiNMC | Contains a 26-minute MPPT sign error, introduced by the server's flip handling (Section 2.7) |
+| LiNMC General Test (29 Jun) | Operational, LiNMC | Contains a 26-minute MPPT sign error, introduced by the server's flip handling (Section 2.7) |
 
 ## Short answers
 
@@ -214,7 +214,7 @@ The idle updates are the same as in K3. There is no signed guard.
 
 ![Estimated sensor bias around the 29 Jun MPPT sign error](figures/kcl_bias_mppt_fault.png)
 
-*Figure 2. LiNMC Battery Discharge Test, 29 Jun. Top: the currents as the server passes them to the corrector, with a rolling median over about 3.5 s for readability. Shaded: the MPPT sign error introduced by the server's flip latch (the recorded MPPT current is positive). Middle and bottom: the MPPT and battery bias estimates. Offsets only (blue) ignores the error. Gated KCL (green) takes in part of it and blames mostly the battery sensor. The repo corrector (orange) takes in all of it.*
+*Figure 2. LiNMC General Test, 29 Jun. Top: the currents as the server passes them to the corrector, with a rolling median over about 3.5 s for readability. Shaded: the MPPT sign error introduced by the server's flip latch (the recorded MPPT current is positive). Middle and bottom: the MPPT and battery bias estimates. Offsets only (blue) ignores the error. Gated KCL (green) takes in part of it and blames mostly the battery sensor. The repo corrector (orange) takes in all of it.*
 
 ## 5. Conclusion: the KCL balance update is harmful
 

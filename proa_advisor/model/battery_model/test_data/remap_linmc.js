@@ -15,7 +15,7 @@ const path = require('path');
 const ADC_ZERO_CURRENT = 32768;     // Bipolar ADC reading for 0 A (see adc_converter.js)
 
 const input_dir = path.resolve(__dirname, process.argv[2] || 'LiNMC');
-const output_dir = path.resolve(__dirname, process.argv[3] || 'LiNMC Remapped');
+const output_dir = path.resolve(__dirname, process.argv[3] || 'LiNMC Controlled Discharge');
 
 if (input_dir === output_dir) {
     throw new Error('Output folder must be different from input folder.');

@@ -14,7 +14,7 @@ DATASETS = {
     # Channels specified here due to wiring mismatches during testing
     "LiFePO4": {
         # 25 May 2026 capacity test, ~1 ms per row. ch0 and ch1 both measure the battery current (ch1 is wired the other way)
-        "raw_data_dir": _TEST_DATA / "LiFePO4 Remapped" / "original",
+        "raw_data_dir": _TEST_DATA / "LiFePO4 Controlled Discharge" / "original",
         "current_channels": ("ch0", "ch1"),
         "voltage_channel": "ch6",
         "sample_period_s": 0.001,
@@ -31,7 +31,7 @@ DATASETS = {
         # Four sessions a week apart (18 Mar - 8 Apr 2026), 32 ms per row. After remap_linmc.js ch0 is unused (fixed at 0 A),
         # ch2 is the battery current and ch1 the load current on the same path. The 8 Apr session continues after the
         # 1 Apr BMS cutoff and is included in the capacity
-        "raw_data_dir": _TEST_DATA / "LiNMC Remapped",
+        "raw_data_dir": _TEST_DATA / "LiNMC Controlled Discharge",
         "current_channels": ("ch2", "ch1"),
         "voltage_channel": "ch6",
         "sample_period_s": 0.032,

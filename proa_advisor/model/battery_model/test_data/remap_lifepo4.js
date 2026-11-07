@@ -17,8 +17,8 @@ const path = require('path');
 
 const ADC_ZERO_CURRENT = 32768;     // Bipolar ADC reading for 0 A (see adc_converter.js)
 
-const input_dir = path.resolve(__dirname, process.argv[2] || 'LiFePO4 Remapped/original');
-const output_dir = path.resolve(__dirname, process.argv[3] || 'LiFePO4 Remapped');
+const input_dir = path.resolve(__dirname, process.argv[2] || 'LiFePO4 Controlled Discharge/original');
+const output_dir = path.resolve(__dirname, process.argv[3] || 'LiFePO4 Controlled Discharge');
 
 if (input_dir === output_dir) {
     throw new Error('Output folder must be different from input folder.');

@@ -1,5 +1,5 @@
 const { Battery2RCEKF } = require("./kalman_filter_helper/filter")
-const { CurrentKCLCorrector } = require("./kalman_filter_helper/kcl_corrector")
+const { CurrentKCLCorrector, KCLFaultMonitor } = require("./kalman_filter_helper/kcl_corrector")
 const { adc_to_current, adc_to_voltage } = require("../adc_converter")
 const { load_battery_noise, load_battery_constants, diag } = require('./kalman_filter_helper/helper');
 const { insertSocSensorDataBulk, insertAllStatesAndReadings, getLastMainBatteryState, getLastAlternateBatteryState, getLastKCLCorrectionState, getRunId, createOrUpdateRunInfo, getRunInfo } = require("../../model/power_management_db")
@@ -37,6 +37,8 @@ const ENABLE_OFFSET_CORRECTION      = process.env.ENABLE_OFFSET_CORRECTION !== '
 const ENABLE_KCL_CORRECTION         = process.env.ENABLE_KCL_CORRECTION === 'true';        // default off: harmful as a corrector
 // Fixed MPPT sign. Replaces the old auto-detect, where one glitch below -5 A negated every later reading until restart
 const MPPT_SENSOR_REVERSED          = process.env.MPPT_SENSOR_REVERSED === 'true';         // default off
+// KCL residual fault flag: per-minute median |load - mppt - bat1 - bat2| above this (A). Detection only
+const KCL_FAULT_THRESHOLD_A         = Number(process.env.KCL_FAULT_THRESHOLD_A ?? 2);
 const SAMPLE_INTERVAL_MS            = 0;       // Only for test data
 let ekf_sample_count                = 0;
 let current_run_id                  = null;
@@ -55,6 +57,8 @@ let main_battery                = null;
 let alternate_battery           = null;
 let kcl_corrector               = null;
 let filter_started              = false;
+let first_sample_seen           = false;
+const kcl_fault_monitor         = new KCLFaultMonitor({ thresholdA: KCL_FAULT_THRESHOLD_A });
 
 // Self correction
 // Removed load flip detection in case of regenerative braking, as load current can be negative in that case
@@ -69,8 +73,10 @@ let total_time = 0;
 let sensor_power_consumption    = 0;  // Total power consumption of sensors in Watts
 
 
-// Smoothing
-const MEDIAN_WINDOW_SIZE    = 10;
+// Smoothing: each filter step uses the charge-preserving mean of WINDOW_SIZE samples (see windowInputs).
+// A median is not charge-preserving: it moved integrated charge by up to 0.06 pp on the recorded runs
+// (final_report/sampling_rate_section/sampling_rate.md).
+const WINDOW_SIZE           = 10;
 let window_counter          = 0;
 let time_diff_window        = [];
 let mppt_out_window         = [];   let load_in_window      = [];
@@ -82,7 +88,7 @@ let last_main_battery_state         = null;
 let last_alternate_battery_state    = null;
 let last_kcl_correction_state       = null;
 
-const SAMPLE_INTERVAL_BEFORE_WRITE  = 1000 / MEDIAN_WINDOW_SIZE;
+const SAMPLE_INTERVAL_BEFORE_WRITE  = 1000 / WINDOW_SIZE;
 
 async function onNewSample(sample, force_log = false, is_test = false) {
     activeUpdates++;
@@ -113,6 +119,12 @@ async function onNewSample(sample, force_log = false, is_test = false) {
         }
 
         let { counter, time_diff_us, a0, a1, a2, a3, a4, a5, a6, a7 } = sample;
+        // The first sample's time_diff is the time since a sample this process never saw, so no current is
+        // integrated over it (as in final_report/soc_eval.py, where dt is 0 at a session start)
+        if (!first_sample_seen) {
+            first_sample_seen = true;
+            time_diff_us = 0;
+        }
 
         let load_in = adc_to_current(a1, 1);
         let mppt_out = MPPT_SENSOR_REVERSED ? -adc_to_current(a0, 1) : adc_to_current(a0, 1);
@@ -286,21 +298,13 @@ async function onNewSample(sample, force_log = false, is_test = false) {
         batt2_v_window.push(Number(batt2_v));
         window_counter++;
 
-        if (window_counter < MEDIAN_WINDOW_SIZE) {
-            return; // Wait until we have enough samples to compute median
+        if (window_counter < WINDOW_SIZE) {
+            return; // Wait until the window is full
         }
 
         try {
-            // Check the values actually passed to the filter (window sum / medians), not the raw sample
-            const inputs = {
-                time_diff_us: time_diff_window.reduce((a, b) => a + b, 0),
-                mppt_out: getMedian(mppt_out_window),
-                load_in: getMedian(load_in_window),
-                batt1_net: getMedian(batt1_net_window),
-                batt2_net: getMedian(batt2_net_window),
-                batt1_v: getMedian(batt1_v_window),
-                batt2_v: getMedian(batt2_v_window),
-            };
+            // Check the values actually passed to the filter (window sum / means), not the raw sample
+            const inputs = windowInputs();
             const bad = Object.entries(inputs).filter(([, v]) => !Number.isFinite(v));
             if (bad.length) {
                 console.warn('Skipping filter step, non-finite inputs:', inputs, {
@@ -363,6 +367,14 @@ async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_ne
     let kcl_cov = null;
     let kcl_biases = null;
 
+    const kcl_fault = kcl_fault_monitor.update(time_diff_us / 1e6, {
+        loadCurrent: load_in, chargeCurrent: mppt_out, battery1NetCurrent: batt1_net, battery2NetCurrent: batt2_net,
+    });
+    if (kcl_fault.changed) {
+        const msg = `KCL residual fault ${kcl_fault.fault ? 'ON' : 'cleared'} at ${(total_time / 3600).toFixed(3)} h: per-minute median ${kcl_fault.medianA.toFixed(2)} A (threshold ${KCL_FAULT_THRESHOLD_A} A).`;
+        kcl_fault.fault ? console.warn(`${msg} A current sensor or its sign is likely wrong.`) : console.log(msg);
+    }
+
     if (kcl_corrector) {
         const { state, biases, currents } = kcl_corrector.update({
             dt: time_diff_us / 1e6,
@@ -407,6 +419,8 @@ async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_ne
             Corrected_I_batt_alternate: corrected_currents.battery2NetCorrected,
             Corrected_I_mppt: corrected_currents.chargeCorrected,
             Corrected_I_load: corrected_currents.loadCorrected,
+            KCL_residual_minute_A: kcl_fault_monitor.lastMedianA,   // not stored in the DB (no column yet)
+            KCL_fault: kcl_fault.fault,
             V_batt_main: batt1_v,
             V_batt_alternate: batt2_v > BATT_CUTOFF_VOLTAGE ? batt2_v : null,
             Corrected_V_batt_main: null,
@@ -531,10 +545,31 @@ async function getCurrentRunId() {
     return current_run_id ?? (await resolveRun()).run_id;
 }
 
-function getMedian(arr) {
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+/**
+ * One filter input from the current window.
+ * - Currents: time-weighted mean, sum(I * dt) / sum(dt), so the window carries exactly the charge of its samples.
+ *   detectAndCorrectFlips has already set a battery's current to 0 for samples below the cutoff.
+ * - Voltages: mean over the samples above the cutoff only, so a logger dropout (0 V samples) cannot average into a
+ *   false voltage above the cutoff. With no such sample the slot reads 0 V (disconnected).
+ */
+function windowInputs() {
+    const dt_sum = time_diff_window.reduce((a, b) => a + b, 0);
+    const currentMean = (arr) => dt_sum > 0
+        ? arr.reduce((acc, v, k) => acc + v * time_diff_window[k], 0) / dt_sum
+        : arr.reduce((a, b) => a + b, 0) / arr.length;
+    const connectedMean = (arr) => {
+        const ok = arr.filter((v) => v > BATT_CUTOFF_VOLTAGE);
+        return ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : 0;
+    };
+    return {
+        time_diff_us: dt_sum,
+        mppt_out: currentMean(mppt_out_window),
+        load_in: currentMean(load_in_window),
+        batt1_net: currentMean(batt1_net_window),
+        batt2_net: currentMean(batt2_net_window),
+        batt1_v: connectedMean(batt1_v_window),
+        batt2_v: connectedMean(batt2_v_window),
+    };
 }
 
 function setSensorPowerConsumption(power) {
