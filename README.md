@@ -320,7 +320,7 @@ If ssh does not work, you may need to connect the Pi to an external screen and k
    ```bash
    mkdir apps
    cd apps
-   git clone https://github.com/Inverated/Proa_Local_Server_Network advisor
+   git clone https://github.com/shipshape-marine/solar_proa_network_server advisor
    cd advisor/
    yarn install
    yarn start:all
