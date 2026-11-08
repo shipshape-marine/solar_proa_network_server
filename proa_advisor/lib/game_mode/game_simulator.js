@@ -12,8 +12,8 @@ into live runs (getRunId and the EKF restore both read the newest DB rows).
 ADS8688 pin   Game input                               Wiring (0 to GAME_FULL_SCALE_V)
 A0            MPPT current pot                         pot ends to 5 V / GND, wiper to pin
 A1            Load current pot                         same
-A2            Charge selector: MPPT -> main / spare     switch: 0 V = main, 5 V = spare
-A3            Discharge selector: load <- main / spare  switch: 0 V = main, 5 V = spare
+A2            Charge selector: MPPT -> main / spare     switch: 5 V (On) = main, 0 V (Off) = spare
+A3            Discharge selector: load <- main / spare  switch: 5 V (On) = main, 0 V (Off) = spare
 A4            Simulation speed pot                     0 V = paused, 5 V = GAME_MAX_SPEED x
 A5            unused                                   tie to GND
 A6, A7        unused (battery voltage divider pins)    leave unconnected
@@ -82,7 +82,6 @@ async function onGameSample(sample) {
     window_sum[PIN.load_sel]   += adc_to_voltage(Number(sample.a3), 1);
     window_sum[PIN.speed]      += adc_to_voltage(Number(sample.a4), 1);
     window_count++;
-
     if (window_count < STEP_SAMPLES) return;
 
     const v = window_sum.map(s => s / window_count);
@@ -101,8 +100,8 @@ async function onGameSample(sample) {
 async function step(v, dt_real) {
     let i_mppt  = norm(v[PIN.mppt]) * MPPT_MAX_A;
     let i_load  = norm(v[PIN.load]) * LOAD_MAX_A;
-    charge_to   = schmitt(v[PIN.charge_sel], charge_to === "alternate") ? "alternate" : "main";
-    load_from   = schmitt(v[PIN.load_sel], load_from === "alternate") ? "alternate" : "main";
+    charge_to   = schmitt(v[PIN.charge_sel], charge_to === "main") ? "main" : "alternate";
+    load_from   = schmitt(v[PIN.load_sel], load_from === "main") ? "main" : "alternate";
     const speed = norm(v[PIN.speed]) * MAX_SPEED;
     const dt    = dt_real * speed;      // Simulated seconds this step
 
