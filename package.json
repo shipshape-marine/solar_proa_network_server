@@ -4,7 +4,7 @@
   "main": "index.js",
   "repository": "https://github.com/Inverated/Proa_Local_Server_Network.git",
   "author": "KQF <120025059+Inverated@users.noreply.github.com>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "install:yarn": "npm install -g yarn",
     "start:seperate": "concurrently \"cd proa_advisor && npm start\" \"cd proa_advisor_react && npm run dev\"",
