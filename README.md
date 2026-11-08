@@ -52,7 +52,7 @@ Simulation and validation is done on a parameterised model of the electrical sys
 
 For power management board - ESP32 C3 + ADS8688 only
 
-KiCad build file [here](./Hardware%20Schematics/ADC%20Power%20Sensor%20Design/).
+KiCad build file [here](./Hardware%20Schematics/Electrical%20Schematics/ADC%20Power%20Sensor%20Design/).
 
 BOM file might be outdated. KiCad or other PCB design software often have plugins to query available components and prices from PCB manufacturers (e.g. JLCPCB). Please check with your PCB manufacturer for the latest prices and availability.
 
@@ -109,7 +109,7 @@ React frontend for real time data visualization and device control.
 
 - Access to the web application via the local network on port 4000.
 
-- Real time console management in dev panel via WebSocket & xterm to the React frontend running on port 3001 for communication
+- Real time console management in dev panel via WebSocket & xterm, with the backend WebSocket server running on port 3001.
 
 - Data streaming from backend to frontend via a one-way Server Side Event (SSE) connection for real time data visualization.
 
@@ -144,17 +144,17 @@ Backend structure is kept simple as this meant to mimic a control panel and data
 - Handler folder for handling different data streams
     - Receiving raw bytes from the master ESP32 node, parsing it, before handing it to the appropriate handler for processing and storage in the database.
     - Handler for sending commands to the master ESP32 node via Serial communication.
-    - Sync data with cloud database (Supabase - Currently disabled) when internet connection is available.
+    - Sync data with cloud database (Supabase - disabled by default, set `USE_SUPABASE=true` in .env to enable & re-activate / use a different db) when internet connection is available.
     - Transmit messages (status, errors, warnings) to the React frontend via SSE for real time visualization.
     - Receives command from dev panel from the frontend (connect to wifi, update repo, configure running mode, etc.) and execute it on the backend.
 - Lib for custom functions
     - (Extended) Kalman filter implementation on Javascript
     - KCL Corrector algorithm
-- Scripts folder for handling server management (Following npm commands require you to be in the backend folder)
+- Scripts folder for handling server management (Following npm commands can be run from the repo root or the backend folder)
     - Automatic building of frontend into backend for deployment (`npm run rebuild`)
-    - Automatic restart of backend after pulling repo from github (`npm run start:all`)
+    - Install dependencies and start the backend (`npm run start:all`). To pull the repo from github and restart, use "Update Repository and Restart Server" in the dev panel
     - Download map tiles for offline usage (`npm run download:map`)
-    - Automatic zipping and unzipping map tiles when building / downloading
+    - Automatic zipping and unzipping map tiles when downloading
 - Model folder pslit into 2 file for each table
     - {__}_models.js for defining the table structure and schema
     - {__}_db.js for defining the functions to interact with the table (CRUD operations)
@@ -191,8 +191,8 @@ Drives a battery simulation from a bare ADS8688 board with potentiometers and sw
 |---|---|---|
 | A0 | MPPT current, 0 to `GAME_MPPT_MAX_A` | 10 kΩ linear pot: ends to 5 V and GND, wiper to pin |
 | A1 | Load current, 0 to `GAME_LOAD_MAX_A` | same |
-| A2 | Charge selector: MPPT to main (0 V) or spare (5 V) | SPDT toggle: common to pin, throws to 5 V and GND |
-| A3 | Discharge selector: load from main (0 V) or spare (5 V) | same |
+| A2 | Charge selector: MPPT to main (5 V) or spare (0 V) | SPDT toggle: common to pin, throws to 5 V and GND |
+| A3 | Discharge selector: load from main (5 V) or spare (0 V) | same |
 | A4 | Simulation speed, 0 (paused) to `GAME_MAX_SPEED` x | same as A0 |
 | A5 | unused | tie to GND |
 | A6, A7 | unused (battery voltage divider pins) | leave unconnected |
@@ -205,7 +205,7 @@ React frontend with MUI dashboard [template](https://github.com/mui/material-ui/
 
 Admin dashboard template used for data visualization and device control, with a dev panel for debugging and testing purposes (some config and mac address of microcontrollers transmited over api unencrypted as it is not a critical infrastructure).
 
-- Each component resides in its own folder with "index.js" as the main entry point, and "styles.js" for styling. The components are organized into folders based on how they will be rendered (e.g. Dev Panel > Tabs > Database Tab > index.js).
+- Each component resides in its own folder with "index.tsx" as the main entry point, and "styles.css" for styling where needed. The components are organized into folders based on how they will be rendered (e.g. Dev Panel > tabs > Database > index.tsx).
 
 - Server Side Event (SSE) for real time data streaming collected in "Dashboard.tsx" and passed down to the appropriate component for rendering (add more eventlisteners for different data sources).
 
@@ -220,7 +220,7 @@ Admin dashboard template used for data visualization and device control, with a 
 - To access control of the ESP32 devices (strain / IMU), option will only be unlocked in the original tab after loging into the dev panel. 
 - Internet: Connect to a Wi-Fi network (Does not work with some device hotspots due to mismatch of bandwidth of the device and external wifi adapter)
 - Console: Direct access to the backend console for debugging and testing purposes.
-- Server: Switch between Test and Normal mode, update the repo (requires internet connection), and restart the server.
+- Server: Switch between Normal, Test and Game mode, update the repo (requires internet connection), rebuild the frontend and restart the server, or stop the server (this also shuts down the Raspberry Pi).
 - Database: View the database and export it to a CSV file for analysis.
 - Logout: Logout
 
@@ -230,12 +230,12 @@ Admin dashboard template used for data visualization and device control, with a 
 ## Part 1: Running the App
 
 1. Copy .env-example to .env
-2. `cd` into `PROA_LOCAL_SERVER_NETWORK`.
+2. `cd` into `solar_proa_network_server`.
 3. Ensure npm is installed on your system.
 4. Run `npm run install:yarn`.
 5. Run `npm run rebuild`.
 6. Run `npm run start:all`.
-   - This automatically builds the React app and runs it with Node.js.
+   - This installs the backend dependencies and runs the server with Node.js.
 7. Open `http://localhost:4000` in your browser.
 8. Dev panel access: username=admin   password=admin
 
@@ -322,12 +322,16 @@ If ssh does not work, you may need to connect the Pi to an external screen and k
    cd apps
    git clone https://github.com/shipshape-marine/solar_proa_network_server advisor
    cd advisor/
+   sudo apt-get install -y git-lfs
+   git lfs pull --include="proa_advisor/map-tiles.zip"
    yarn install
    yarn start:all
    ```
-2. Force-stop the process once the initial build completes.
+2. Force-stop the process once the dependencies finish installing.
 
 3. Copy '.env' into proa_advisor
+
+4. Extract the offline map tiles: `yarn extract:map`
 
 ### 2.7 Set Up the Network (Wi-Fi Access Point)
 

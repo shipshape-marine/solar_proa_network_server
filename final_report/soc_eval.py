@@ -11,7 +11,7 @@ Sign convention: positive current is discharge (as in filter.js). Methods compar
 - EKF: 2RC EKF.
 - EKF + KCL: 2RC EKF fed the current after the gated KCL corrector (offsets + current-balance update).
 Offset correction is a shared input step for CC, EKF and EKF + KCL, not a method of its own
-(see final_report/kcl_correction_explained.md).
+(see final_report/analysis/original_kcl_correction_analysis/kcl_correction_explained.md).
 """
 from pathlib import Path
 import json

@@ -15,7 +15,7 @@ KCL correction (ENABLE_KCL_CORRECTION, default off):
     skips balance innovations beyond kclGate standard deviations.
     HARMFUL as a corrector. One balance equation cannot tell which active sensor is wrong, so it splits the residual
     by the assumed drift rates, and a lasting fault (for example a reversed MPPT reading) eventually passes the gate
-    and is pushed into the battery currents. Evidence: final_report/kcl_correction_explained.md, Section 5.
+    and is pushed into the battery currents. Evidence: final_report/analysis/original_kcl_correction_analysis/kcl_correction_explained.md, Section 5.
 
 Channels below activeCurrent output 0 A. Values are the tuned ones from final_report/soc_eval.py (OFFSETS, KCL_GATED).
 */
@@ -177,7 +177,7 @@ class CurrentKCLCorrector {
  * Takes the raw balance load - mppt - bat1 - bat2 of every filter step (disconnected batteries already 0 A) and,
  * per minute of recorded time, its median. A minute whose |median| is above thresholdA is a fault minute; the flag
  * is on from that minute until the next minute at or below the threshold.
- * Evidence (final_report/kcl_correction_explained.md, Section 5): during the 26-min MPPT sign error of 29 Jun the
+ * Evidence (final_report/analysis/original_kcl_correction_analysis/kcl_correction_explained.md, Section 5): during the 26-min MPPT sign error of 29 Jun the
  * per-minute median was 3.8 A on average and never below 1.4 A; outside it, it never went above 1.7 A on any run.
  * The 2 A default is provisional; more data is needed to set it.
  */

@@ -351,7 +351,7 @@ async function updateFilter(time_diff_us, mppt_out, load_in, batt1_net, batt2_ne
         }
         console.log(`Current correction: offsets ${ENABLE_OFFSET_CORRECTION ? 'on' : 'off'}, KCL ${ENABLE_KCL_CORRECTION ? 'on' : 'off'}`);
         if (ENABLE_KCL_CORRECTION) {
-            console.warn("KCL correction is harmful as a corrector (see final_report/kcl_correction_explained.md). Set ENABLE_KCL_CORRECTION=false.");
+            console.warn("KCL correction is harmful as a corrector (see final_report/analysis/original_kcl_correction_analysis/kcl_correction_explained.md). Set ENABLE_KCL_CORRECTION=false.");
         }
         console.log("====================================================");
         console.log("Started Kalman filter for power management");
