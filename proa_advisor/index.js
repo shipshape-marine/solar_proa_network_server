@@ -42,6 +42,8 @@ const { connectToWifi } = require("./handler/internet_connection/wifi_manager")
 const {  } = require("./handler/terminal_socket/ws");
 const { hasInternet } = require("./handler/database_update/connectivity");
 const { switchMode } = require("./handler/switch_env_mode");
+const { getRunMode, RUN_MODES } = require("./handler/run_mode");
+const { getGameHistory } = require("./lib/game_mode/game_simulator");
 const { closeAllConnections } = require("./handler/terminal_socket/ws");
 const { updateRepo } = require("./handler/repository/simple_git");
 const { streamSOCSensorCsvByRun, streamSensorCsvByRun, normalizeRowId, normalizeRunId, normalizeSensorKey, getSOCSensorRunSummaries, getRunSummaries, getSensorLabel, DownloadInProgressError } = require("./handler/database_download");
@@ -170,6 +172,10 @@ app.get("/data_stream", (req, res) => {
 
 app.get("/initial_power_data", async (req, res) => {
     try {
+        // Game mode keeps its readings in memory only (never in the DB)
+        if (getRunMode() === "game") {
+            return res.json(getGameHistory());
+        }
         const runId = await getCurrentRunId();
         // 5000 = number of points to display in frontend
         const initialData = await populateInitalChartData(runId, 5000);
@@ -285,20 +291,23 @@ app.post("/connect_wifi", middlewareAuth, async (req, res) => {
 });
 
 app.get("/get_curr_mode", middlewareAuth, (req, res) => {
-    const mode = process.env.IS_TEST_RUN === "true" ? "test" : "normal";
-    res.status(200).json({ "mode": mode });
+    res.status(200).json({ "mode": getRunMode() });
 });
 
 app.get("/set_mode_and_restart", middlewareAuth, (req, res) => {
     const { mode } = req.query;
+    if (!RUN_MODES.includes(mode)) {
+        return res.status(400).json({ message: `Invalid mode. Must be one of: ${RUN_MODES.join(", ")}` });
+    }
     switchMode(mode);
+    // Reply before restarting, otherwise the response is lost with the process
+    res.status(200).json({ message: `Switched mode to ${getRunMode()}` });
     if (process.send) {
         closeAllConnections();
         process.send({
             action: "restart"
         });
     }
-    res.status(200).json({ message: `Switched mode to ${process.env.IS_TEST_RUN === "true" ? "test" : "normal"}` });
 });
 
 app.get("/rebuild_and_restart", middlewareAuth, (req, res) => {

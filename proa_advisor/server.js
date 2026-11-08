@@ -11,6 +11,7 @@ const { run_test } = require("./lib/Kalman Filter/ekf_test")
 const { getCurrentRunId, setAlternateBatteryType, setMainBatteryType } = require("./lib/Kalman Filter/kalman_filter");
 const { startSerialReader } = require('./handler/serial_reader/serialReader');
 const { updateDatabase } = require("./handler/database_update/supabase_update");
+const { getRunMode } = require("./handler/run_mode");
 
 
 const OVERRIDE_DB = process.env.OVERRIDE_DB === 'true';
@@ -38,10 +39,13 @@ function startBackend() {
         count && console.log(`Inserted ${count} records into AlternateRCMapping.`);
     }).then(() => {
         console.log("\n//====================================================//\nDatabase setup complete.\n//====================================================//\n");
-        if (process.env.IS_TEST_RUN === 'true') {
-            run_test();
-        } else {
-            startSerialReader();
+        // The serial reader always runs so IMU, strain and GPS stay live in every mode.
+        // Only the ADS8688 (PWER) samples are routed by mode, in power_data_parser.js.
+        const mode = getRunMode();
+        console.log(`Run mode: ${mode}`);
+        startSerialReader();
+        if (mode === 'test') {
+            run_test();     // CSV replay replaces the live ADS8688 data
         }
     }).catch((err) => {
         console.error("\n//====================================================//\nBackend startup failed:", err && err.message ? err.message : err);
