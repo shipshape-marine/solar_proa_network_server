@@ -1,4 +1,5 @@
 const { setSensorPowerConsumption } = require('../../../lib/Kalman Filter/kalman_filter');
+const { getRunMode } = require('../../run_mode');
 
 function checksum16Bytes(buf) {
     let sum = 0;
@@ -48,8 +49,11 @@ function parseSensorPowerData(recvBuf, packet_bytes, packetSkipped = 0) {
     //console.log(`Shunt: ${shuntvoltage}V; Bus: ${busvoltage}V; Load: ${loadvoltage}V`)
     //console.log(`Load: ${current_mA}mA; Power: ${power_mW}mW`)
 
-    // Update the sensor power consumption in the Kalman filter
-    setSensorPowerConsumption(power_mW / 1000); // Convert mW to W
+    // Update the sensor power consumption in the Kalman filter.
+    // Live only: it would add today's sensor draw to a replay (test) or a simulation (game).
+    if (getRunMode() === 'normal') {
+        setSensorPowerConsumption(power_mW / 1000); // Convert mW to W
+    }
     
     return recvBuf.subarray(packet_bytes); // Return the remaining buffer after processing the packet
 }

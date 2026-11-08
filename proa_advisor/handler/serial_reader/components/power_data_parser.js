@@ -1,4 +1,6 @@
 const { onNewSample } = require("../../../lib/Kalman Filter/kalman_filter");
+const { onGameSample } = require("../../../lib/game_mode/game_simulator");
+const { getRunMode } = require("../../run_mode");
 
 const TIME_BETWEEN_SAMPLES_ALERT = 5000;
 const QUEUE_ALERT = 100;
@@ -31,6 +33,12 @@ function parsePowerData(recvBuf, packet_bytes, packetSkipped = 0) {
         console.warn(`Large time gap: ${time_diff_us} us at counter ${counter}`);
     }
 
+    // Test mode: the CSV replay is the ADC source, so live packets are parsed
+    // (to keep the buffer in sync) but dropped.
+    if (getRunMode() === 'test') {
+        return recvBuf.subarray(packet_bytes);
+    }
+
     queue.push({
         counter: counter,
         time_diff_us: time_diff_us,
@@ -53,9 +61,10 @@ async function consumePowerQueue() {
     if (consuming) return;
     consuming = true;
 
+    const handler = getRunMode() === 'game' ? onGameSample : onNewSample;
     while (queue.length > 0) {
         const sample = queue.shift();
-        await onNewSample(sample);
+        await handler(sample);
     }
     consuming = false;
 

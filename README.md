@@ -175,9 +175,29 @@ Extended Kalman filter used in SoC estimation for the 2 battery bank system. The
 
 3 filters are running simultaneously. 1 for each battery bank and 1 for the 4 Hall Effect current sensor to correct drifting using Kirchhoff's Current Law (KCL).
 
-## Test Mode
+## Run Modes
 
-Test mode is only implemented for power management sensor data stream. Setting test mode to true in .env or in the frontend dev panel will simulate the power management data from previous charging and discharge cycles. 
+Set `RUN_MODE` in .env (`normal`, `test` or `game`) or use the Server Management tab in the frontend dev panel. The server restarts on a switch. Only the power management (ADS8688) data stream changes between modes; the serial reader always runs, so IMU, strain, GPS and sensor power data stay live in every mode.
+
+### Test Mode
+
+Replays the power management data from previous charging and discharge cycles (CSV files in `model/battery_model/test_data`). Live ADS8688 packets are dropped while the replay runs.
+
+### Game Mode
+
+Drives a battery simulation from a bare ADS8688 board with potentiometers and switches, with no battery or real load connected. Battery state is coulomb counting only, and the battery voltage is the OCV looked up from the SoC. Nothing is written to the database, so game data never mixes into live runs. The charts refill from memory on a page reload, and the simulation restarts at `GAME_INITIAL_SOC_*` after a server restart.
+
+| ADS8688 pin | Input | Wiring |
+|---|---|---|
+| A0 | MPPT current, 0 to `GAME_MPPT_MAX_A` | 10 kΩ linear pot: ends to 5 V and GND, wiper to pin |
+| A1 | Load current, 0 to `GAME_LOAD_MAX_A` | same |
+| A2 | Charge selector: MPPT to main (0 V) or spare (5 V) | SPDT toggle: common to pin, throws to 5 V and GND |
+| A3 | Discharge selector: load from main (0 V) or spare (5 V) | same |
+| A4 | Simulation speed, 0 (paused) to `GAME_MAX_SPEED` x | same as A0 |
+| A5 | unused | tie to GND |
+| A6, A7 | unused (battery voltage divider pins) | leave unconnected |
+
+Take 5 V and GND from the ESP32 5 V pin, with a common ground to the ADS8688 board. No firmware change is needed: A0-A5 already use the ±5.12 V range. If the pots run from 3.3 V instead, set `GAME_FULL_SCALE_V=3.3`. Each source and load goes to exactly one battery, so both batteries can never charge at the same time. When both switches pick the same battery, its net current is load − MPPT. An empty battery cuts the load, and a full battery stops charging.
 
 # Frontend Structure
 
@@ -521,4 +541,4 @@ The Wi-Fi chip can only act as **either** an access point **or** a receiver at o
 - A stronger computer / mini pc can be used to run the server instead for a larger vessel where more users are expected to connect to the server at the same time, or for a more complex system with more sensors and data streams and AI processing or sailing / electrical "expert" trained model can be implemented to provide real time feedback and control of the vessel.
 - For production use / future development, proper security measures, such as ESP-now encryption, encrypted data (on top of current JWT authentication), and secure communication protocols (HTTPS, WSS) should be implemented to protect the system from potential attacks and unauthorized access.
 - As more sensor data is added, proper routing and folder sturcture should be implemented. Currently, all api end points are dumped into index.js as there is not a lot yet. 
-- Test mode is currently limited to power management data stream but should be extended to other data stream as data will be collected into the db and be downloadable for future testing.
+- Test and game modes currently replace only the power management data stream (other streams stay live). Test replay could be extended to other data streams as data will be collected into the db and be downloadable for future testing.

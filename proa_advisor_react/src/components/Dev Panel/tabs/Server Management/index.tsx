@@ -3,7 +3,12 @@ import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import './styles.css';
 
-type ServerMode = 'test' | 'normal';
+type ServerMode = 'normal' | 'test' | 'game';
+const SERVER_MODES: { mode: ServerMode; label: string }[] = [
+    { mode: 'normal', label: 'Normal' },
+    { mode: 'test', label: 'Test' },
+    { mode: 'game', label: 'Game' },
+];
 type StatusKind = 'success' | 'error' | 'info';
 const TIMEOUT_DURATION = 2000; // Duration in milliseconds for status message to disappear
 const LOCALHOST_API_BASE_URL = 'http://localhost:4000';
@@ -62,7 +67,7 @@ export default function ServerManagementTab() {
         setIsLoadingMode(true);
         try {
             const data = await fetchWithFallback('/get_curr_mode');
-            if (data.mode === 'test' || data.mode === 'normal') {
+            if (SERVER_MODES.some(({ mode }) => mode === data.mode)) {
                 setCurrentMode(data.mode);
             } else {
                 throw new Error('Invalid mode response');
@@ -76,12 +81,11 @@ export default function ServerManagementTab() {
         }
     }
 
-    async function handleSwitchMode() {
+    async function handleSwitchMode(newMode: ServerMode) {
         setStatusMessage('');
         try {
-            const newMode = currentMode === 'test' ? 'normal' : 'test';
-            const response = await fetchWithFallback(`/set_mode_and_restart?mode=${newMode}`);
-            const data = await response.json();
+            // fetchWithFallback already returns parsed JSON
+            const data = await fetchWithFallback(`/set_mode_and_restart?mode=${newMode}`);
             setStatusKind('success');
             setStatusMessage(data.message || 'Server mode switched.');
         } catch (error) {
@@ -155,16 +159,22 @@ export default function ServerManagementTab() {
                 Current mode:{' '}
                 {isLoadingMode
                     ? 'Loading...'
-                    : currentMode === 'test'
-                        ? 'Test'
-                        : currentMode === 'normal'
-                            ? 'Normal'
-                            : 'Unavailable'}
+                    : SERVER_MODES.find(({ mode }) => mode === currentMode)?.label ?? 'Unavailable'}
             </p>
             <Stack spacing={2} sx={{ width: '70%' }}>
-                <Button variant="contained" onClick={handleSwitchMode}>
-                    {currentMode === 'test' ? 'Switch to Normal Mode' : 'Switch to Test Mode'}
-                </Button>
+                <Stack direction="row" spacing={2}>
+                    {SERVER_MODES.map(({ mode, label }) => (
+                        <Button
+                            key={mode}
+                            variant="contained"
+                            sx={{ flex: 1 }}
+                            disabled={isLoadingMode || mode === currentMode}
+                            onClick={() => handleSwitchMode(mode)}
+                        >
+                            {label} Mode
+                        </Button>
+                    ))}
+                </Stack>
                 <Button variant="contained" onClick={handleUpdateAndRestartServer}>
                     Update Repository and Restart Server
                 </Button>
