@@ -36,7 +36,7 @@ async function findValidPort(baudRate = 2000000, timeoutMs = 2000) {
     // Get the list of ports for the device
     // Ports only show up when something is connected, so need to re-fetch the list
     const portList = await SerialPort.list();
-
+    const runMode = process.env.RUN_MODE;
     if (portList.length === 0) {
         console.log('No connected serial ports found.');
         return null;
@@ -49,7 +49,7 @@ async function findValidPort(baudRate = 2000000, timeoutMs = 2000) {
         try {
             const port = new SerialPort({ path: portInfo.path, baudRate, autoOpen: false });
             if (!portInfo.vendorId || !portInfo.productId) {
-                console.log(`Skipping port ${portInfo.path} with missing vendor or product ID.`);
+                runMode !== 'test' && console.log(`Skipping port ${portInfo.path} with missing vendor or product ID.`);
                 continue;
             }
             port.on('error', (err) => {
@@ -75,24 +75,25 @@ async function findValidPort(baudRate = 2000000, timeoutMs = 2000) {
                     });
                 });
                 if (line == null) {
-                    
+                    runMode !== 'test' && console.log(`No response from ${portInfo.path}`);
                 } else if (line && line.includes('ADC Ready')) {
                     return { port, path: portInfo.path };
                 } else if (line && line.includes(POWER_HEADER) || line.includes(SENSOR_HEADER)
                     || line.includes(IMU_HEADER) || line.includes(STRAIN_HEADER) || line.includes(GPS_HEADER) ) {
                     return { port, path: portInfo.path };
                 }
-                console.log(`Attempt ${attempt + 1}/3: No valid response from ${portInfo.path}`);
+                runMode !== 'test' && console.log(line);
+                runMode !== 'test' && console.log(`Attempt ${attempt + 1}/3: No valid response from ${portInfo.path}`);
             }
 
             port.close();
         }
         catch (err) {
-            console.error(`Error testing port ${portInfo.path}: ${err.message}`);
+            runMode !== 'test' && console.error(`Error testing port ${portInfo.path}: ${err.message}`);
         }
     }
 
-    console.log('No valid serial ports found after testing all candidates.');
+    runMode !== 'test' && console.log('No valid serial ports found after testing all candidates.');
     return null;
 }
 
@@ -185,7 +186,8 @@ function processBuffer() {
 }
 
 async function startSerialReader() {
-    console.log('Starting serial reader...');
+    const runMode = process.env.RUN_MODE;
+    runMode !== 'test' && console.log('Starting serial reader...');
     let result;
     try {
         result = await findValidPort();
@@ -196,7 +198,7 @@ async function startSerialReader() {
     }
 
     if (!result) {
-        console.log('Retrying in 3 seconds...');
+        runMode !== 'test' && console.log('Retrying in 3 seconds...');
         setTimeout(startSerialReader, 3000);
         return;
     }
