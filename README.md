@@ -8,13 +8,18 @@
   - [Network Visualization](#network-visualization)
 - [Technology Stack](#technology-stack)
   - [Frontend & Backend Communication](#frontend--backend-communication)
+  - [Offline map and bathymetry layers](#offline-map-and-bathymetry-layers)
 - [Backend Structure](#backend-structure)
   - [Folder Structure](#folder-structure)
   - [Steps to Add New Data Stream Handler](#steps-to-add-new-data-stream-handler)
+  - [Kalman Filter Implementation](#kalman-filter-implementation)
+  - [Run Modes](#run-modes)
+    - [Test Mode](#test-mode)
+    - [Game Mode](#game-mode)
 - [Frontend Structure](#frontend-structure)
   - [Steps to add new tabs](#steps-to-add-new-tabs)
   - [Dev panel control](#dev-panel-control)
-- [Setup Guide](#raspberry-pi-4-setup)
+- [Raspberry Pi 4 Setup](#raspberry-pi-4-setup)
   - [Part 1: Running the App](#part-1-running-the-app)
   - [Part 2: Raspberry Pi 4 Setup (Everything else after this is for setting up on raspberry pi)](#part-2-raspberry-pi-4-setup-everything-else-after-this-is-for-setting-up-on-raspberry-pi)
     - [2.1 Initial Setup (from a fresh install via Raspberry Pi Imager)](#21-initial-setup-from-a-fresh-install-via-raspberry-pi-imager)
@@ -149,7 +154,8 @@ Backend structure is kept simple as this meant to mimic a control panel and data
     - Receives command from dev panel from the frontend (connect to wifi, update repo, configure running mode, etc.) and execute it on the backend.
 - Lib for custom functions
     - (Extended) Kalman filter implementation on Javascript
-    - KCL Corrector algorithm
+    - Current offset corrector (optional KCL update, off by default)
+    - Game mode simulator
 - Scripts folder for handling server management (Following npm commands can be run from the repo root or the backend folder)
     - Automatic building of frontend into backend for deployment (`npm run rebuild`)
     - Install dependencies and start the backend (`npm run start:all`). To pull the repo from github and restart, use "Update Repository and Restart Server" in the dev panel
@@ -173,7 +179,9 @@ Backend structure is kept simple as this meant to mimic a control panel and data
 
 Extended Kalman filter used in SoC estimation for the 2 battery bank system. The filter is implemented in Javascript and can be found in the lib folder. The filter is used to estimate the state of charge (SoC) of the battery bank based on the voltage and current measurements from the power management board.
 
-3 filters are running simultaneously. 1 for each battery bank and 1 for the 4 Hall Effect current sensor to correct drifting using Kirchhoff's Current Law (KCL).
+3 filters run at the same time: one EKF per battery bank, and one Kalman filter that estimates the zero offset of the 4 Hall Effect current sensors. Each offset is re-learned whenever its sensor has been idle for 10 s (`ENABLE_OFFSET_CORRECTION`, on by default).
+
+KCL correction (`ENABLE_KCL_CORRECTION`) is off by default. It changed SoC by at most 0.059 pp on the recorded runs, and one balance equation cannot tell which sensor is wrong: with a replayed 26-minute MPPT sign error, the EKF with KCL ended 0.508 pp below the EKF without it. The KCL residual now only raises a fault warning when its per-minute median exceeds `KCL_FAULT_THRESHOLD_A` (default 2 A). The current balance is still used to fix reversed battery sensor signs and to drop samples that cannot be corrected.
 
 ## Run Modes
 
@@ -450,45 +458,6 @@ If ssh does not work, you may need to connect the Pi to an external screen and k
     ```
 
 
-### 2.9 Auto-Redirect Port 80 to the App (Port 4000)
-
-1. Create the redirect service:
-   ```bash
-   sudo nano /etc/nginx/sites-available/solarproa
-   ```
-   Add:
-   ```ini
-   server {
-    listen 80;
-    server_name solarproa.local;
-
-    location / {
-        proxy_pass http://127.0.0.1:4000;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-   }
-   ```
-2. Enable and start it:
-   ```bash
-   sudo ln -s /etc/nginx/sites-available/solarproa /etc/nginx/sites-enabled/
-   ```
-
-3. Test it:
-   ```bash
-   sudo nginx -t
-   ```
-
-4. Restart nginx service
-   ```bash
-   sudo systemctl restart nginx
-   ```
-
-   When connected to the same network as the raspberry pi, go to http://solarproa.local
-
 ### 2.8 Set Up Auto-Start on Boot
 
 1. Create the app service:
@@ -528,6 +497,45 @@ If ssh does not work, you may need to connect the Pi to an external screen and k
    ```bash
    journalctl -u solarproa-advisor -f
    ```
+
+### 2.9 Auto-Redirect Port 80 to the App (Port 4000)
+
+1. Create the redirect service:
+   ```bash
+   sudo nano /etc/nginx/sites-available/solarproa
+   ```
+   Add:
+   ```ini
+   server {
+    listen 80;
+    server_name solarproa.local;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+   }
+   ```
+2. Enable and start it:
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/solarproa /etc/nginx/sites-enabled/
+   ```
+
+3. Test it:
+   ```bash
+   sudo nginx -t
+   ```
+
+4. Restart nginx service
+   ```bash
+   sudo systemctl restart nginx
+   ```
+
+   When connected to the same network as the raspberry pi, go to http://solarproa.local
 
 ### 2.10 Note: AP vs. Wi-Fi Receiver Mode
 
