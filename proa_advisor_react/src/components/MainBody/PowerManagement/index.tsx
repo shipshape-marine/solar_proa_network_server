@@ -12,7 +12,8 @@ import "../../../data_type/power"
 4. Current Load, MPPT, Net Main, Net Alt (actual vs corrected)
 */
 
-const ARRAY_LENGTH = 5000;
+const MAX_POINTS = 3000;
+const DEFAULT_POINTS = 200;
 
 export default function PowerManagement({data}: {data: PowerData | null}) {
     const [xData, setXData] = useState<number[]>([]);
@@ -36,7 +37,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
     const [correctedCurrentNetMain, setCorrectedCurrentNetMain] = useState<number[]>([]);
     const [correctedCurrentNetAlt, setCorrectedCurrentNetAlt] = useState<number[]>([]);
 
-    const [displayDataLength, setDisplayDataLength] = useState<number>(ARRAY_LENGTH);
+    const [displayDataLength, setDisplayDataLength] = useState<number>(DEFAULT_POINTS);
     const lengthSliderRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -63,7 +64,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
     }, []);
 
     function updateInitialData(initialData: PowerData[]) {
-        let defaultLength = ARRAY_LENGTH;
+        let defaultLength = MAX_POINTS;
         if (localStorage.getItem("displayDataLength")) {
             defaultLength = parseInt(localStorage.getItem("displayDataLength") || "");
             setDisplayDataLength(defaultLength);
@@ -153,7 +154,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
         if (lengthSliderRef.current) {
             lengthSliderRef.current.value = displayDataLength.toString();
         }
-        if (displayDataLength === 500) return
+        if (displayDataLength === DEFAULT_POINTS) return
         localStorage.setItem("displayDataLength", displayDataLength.toString());
     }, [displayDataLength]);
 
@@ -163,7 +164,7 @@ export default function PowerManagement({data}: {data: PowerData | null}) {
                 <p>Number of points: {displayDataLength}</p>
                 <Slider 
                     ref={lengthSliderRef}
-                    min={5} max={5000} step={5} 
+                    min={5} max={MAX_POINTS} step={5} 
                     valueLabelDisplay="auto" 
                     value={displayDataLength} 
                     onChange={(event, value) => setDisplayDataLength(value)} />
