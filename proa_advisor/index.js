@@ -249,6 +249,7 @@ app.get("/has_internet", (req, res) => {
 });
 
 app.get("/", (req, res) => {
+    console.log(__dirname + "/public/index.html");
     res.sendFile(__dirname + "/public/index.html");
 });
 
@@ -435,12 +436,41 @@ app.get("/download_sensor", middlewareAuth, async (req, res) => {
     }
 });
 
-if (require.main === module) {
-    startBackend();
-    app.listen(port, "0.0.0.0", () => {
-        console.log(`Listening on port ${port}`);
-        console.log(`Access the application at http://localhost:${port}`);
+// Resolves true if something accepts a TCP connection on host:port.
+// Needed because on Windows, listen() can succeed even when Docker/WSL already own the port.
+function isPortTaken(host, port) {
+    return new Promise((resolve) => {
+        const socket = require("net").connect({ host, port });
+        socket.setTimeout(500);
+        socket.once("connect", () => { socket.destroy(); resolve(true); });
+        socket.once("timeout", () => { socket.destroy(); resolve(false); });
+        socket.once("error", () => resolve(false));
     });
+}
+
+function portInUse() {
+    console.error(`Port ${port} is already in use by another process.`);
+    console.error(`Stop that process and restart. The port is hard-coded, so it cannot change.`);
+    console.error(`  Windows: netstat -ano | findstr :${port}   then   taskkill /PID <pid> /F`);
+    console.error(`  Linux:   lsof -i :${port}   then   kill <pid>`);
+    process.exit(1);
+}
+
+if (require.main === module) {
+    (async () => {
+        const taken = await Promise.all([isPortTaken("127.0.0.1", port), isPortTaken("::1", port)]);
+        if (taken.some(Boolean)) portInUse();
+
+        startBackend();
+        const server = app.listen(port, "0.0.0.0", () => {
+            console.log(`Listening on port ${port}`);
+            console.log(`Access the application at http://localhost:${port}`);
+        });
+        server.on("error", (err) => {
+            if (err.code === "EADDRINUSE") portInUse();
+            throw err;
+        });
+    })();
 }
 
 module.exports = { app };
